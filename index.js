@@ -1,0 +1,712 @@
+// breeze — 설정 창과 기능 불러오기. 기능 코드는 features/ 아래 파일마다 하나씩.
+import { koMatch } from './lib/ko-match.js';
+import { embedFiles, restoreFiles, downloadText, pickFile, saveUserFile } from './lib/files.js';
+import { FEATURES, GROUPS } from './features.js';
+import { onThemeCss } from './lib/theme-css.js';
+
+const KEY = 'breeze';
+const BASE = new URL('.', import.meta.url).href;
+const running = new Map();   // id → 불러온 모듈
+
+function ctx() { return SillyTavern.getContext(); }
+
+// 이름을 바꾸기 전(everyday-toolkit) 설정 · 브라우저 저장을 한 번 옮김 — 켜 둔 기능 · 세부 설정 · 읽던 자리가 그대로 남게
+const OLD_KEY = 'everydayToolkit';
+try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (!k?.startsWith('everyday-toolkit.')) continue;
+        const nk = 'breeze.' + k.slice('everyday-toolkit.'.length);
+        if (localStorage.getItem(nk) === null) localStorage.setItem(nk, localStorage.getItem(k));
+        localStorage.removeItem(k);
+    }
+} catch { /* 저장소 막힘 */ }
+
+function settings() {
+    const ext = ctx().extensionSettings;
+    if (ext[OLD_KEY] && !ext[KEY]) { ext[KEY] = ext[OLD_KEY]; delete ext[OLD_KEY]; ctx().saveSettingsDebounced(); }
+    ext[KEY] ??= {};
+    ext[KEY].enabled ??= {};
+    ext[KEY].options ??= {};
+    return ext[KEY];
+}
+
+// 실리태번은 설정을 통째로 저장해서, 옛 설정을 들고 열려 있던 다른 탭(다른 기기 포함)이 저장하면 여기서 바꾼 값이 사라졌음.
+//   그래서 이 확장 설정을 작은 파일에도 남기고, 켤 때 파일 쪽이 더 최근이면 그걸 씀. 파일에 쓸 땐 그사이 다른 탭이 쓴 것과 합침.
+const STORE = 'breeze-settings.json';
+let storeBase = null, storeT = 0, storing = Promise.resolve();
+const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const clone = (v) => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
+function merge3(base, local, remote) {
+    if (same(local, remote) || same(remote, base)) return local;
+    if (same(local, base)) return remote;
+    if (!isObj(local) || !isObj(remote)) return local;   // 둘 다 바꿨으면 이 탭 것
+    const out = {};
+    for (const k of new Set([...Object.keys(local), ...Object.keys(remote)])) {
+        const v = merge3(isObj(base) ? base[k] : undefined, local[k], remote[k]);
+        if (v !== undefined) out[k] = v;
+    }
+    return out;
+}
+// 기능들이 설정 객체(options[id])를 붙들고 쓰므로 객체를 갈아 끼우지 않고 안을 고침
+function applyInPlace(target, next) {
+    for (const k of Object.keys(target)) if (!(k in next)) delete target[k];
+    for (const [k, v] of Object.entries(next)) {
+        if (isObj(target[k]) && isObj(v)) applyInPlace(target[k], v);
+        else target[k] = clone(v);
+    }
+}
+async function readStore() {
+    const res = await fetch(`/user/files/${STORE}`, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    return isObj(body?.data) ? body.data : null;
+}
+async function writeStore() {
+    const s = settings();
+    const remote = await readStore();
+    if (remote && storeBase && !same(remote, storeBase)) {
+        const merged = merge3(storeBase, clone(s), remote);
+        if (!same(merged, s)) applyInPlace(s, merged);
+    }
+    s.savedAt = Date.now();
+    const data = clone(s);
+    await saveUserFile(STORE, JSON.stringify({ data }));
+    storeBase = data;
+    ctx().saveSettingsDebounced();
+}
+async function loadStore() {
+    const s = settings();
+    const file = await readStore().catch(() => null);
+    if (file && (file.savedAt || 0) > (s.savedAt || 0)) { applyInPlace(s, file); ctx().saveSettingsDebounced(); }
+    storeBase = file ? clone(file) : null;
+    if (!file || (s.savedAt || 0) > (file.savedAt || 0)) save();
+}
+
+function save() {
+    ctx().saveSettingsDebounced();
+    clearTimeout(storeT);
+    storeT = setTimeout(() => { storing = storing.then(writeStore).catch(error => console.warn('[Breeze] 설정 파일 저장', error)); }, 800);
+}
+
+// 기능 파일에 넘기는 도구. 기능마다 자기 옵션 칸을 하나씩 가진다.
+// 기능 상태 표시: 쉬는 중(다른 확장 · 테마가 같은 일을 하거나, 부딪쳐서 물러남) · 오류. 기능은 api.rest('same' | 'clash' | null)로 알림.
+const STATE_TEXT = { same: '다른 확장이나 테마가 같은 일을 하고 있어서 쉬는 중이에요.', clash: '다른 확장과 부딪쳐서 쉬는 중이에요.', error: '오류가 나서 멈췄어요. 껐다 켜거나 새로고침해 주세요.' };
+const featureState = new Map();   // id → 'same' | 'clash' | 'error'
+function setState(id, st) {
+    if ((featureState.get(id) || null) === (st || null)) return;
+    if (st) featureState.set(id, st); else featureState.delete(id);
+    paintState(id);
+}
+function stateHtml(id) { const st = featureState.get(id); return st && settings().enabled[id] ? `<div class="etk-card-state etk-state-${st}">${esc(STATE_TEXT[st])}</div>` : ''; }
+function paintState(id) {
+    const root = dialog();
+    if (!root) return;
+    const text = root.querySelector(`.etk-card[data-id="${id}"] .etk-card-text`);
+    if (text) { text.querySelector('.etk-card-state')?.remove(); text.insertAdjacentHTML('beforeend', stateHtml(id)); }
+    const item = root.querySelector(`.etk-sum-check[data-id="${id}"]`)?.closest('.etk-sum-item');
+    if (item) { const st = settings().enabled[id] && featureState.get(id); item.classList.toggle('etk-sum-rest', !!st); item.title = st ? STATE_TEXT[st] : ''; }
+}
+// breeze 기능 파일에서 난 오류는 그 기능 칸에 표시(어느 기능인지는 오류가 난 파일 이름으로)
+const errorOwner = (err) => { const st = String(err?.stack || ''); const i = st.indexOf(`${BASE}features/`); return i < 0 ? undefined : st.slice(i + BASE.length).match(/^features\/(\w+)\.js/)?.[1]; };
+window.addEventListener('error', (e) => { const id = errorOwner(e.error); if (id && running.has(id)) setState(id, 'error'); });
+window.addEventListener('unhandledrejection', (e) => { const id = errorOwner(e.reason); if (id && running.has(id)) setState(id, 'error'); });
+
+// 휴대폰 폭에서는 세부 설정이 화면을 덮는 한 장으로 열림(CSS). 맨 위 ‘← 기능 이름’ 줄을 누르면 닫음 —
+// 그 줄은 세부 설정 칸의 꾸밈 글(::before)이라, 칸 자신이 눌렸고 맨 위 48px 안이면 뒤로 가기로 봄
+document.addEventListener('click', (e) => {
+    const box = e.target;
+    if (!(box instanceof Element) || !box.matches('#etk_dialog .etk-card > .etk-options') || !matchMedia('(max-width: 700px)').matches) return;
+    if (e.clientY - box.getBoundingClientRect().top > 48) return;
+    box.closest('.etk-card')?.querySelector('.etk-more')?.click();
+});
+
+function makeApi(id) {
+    return {
+        ctx,
+        options() { const s = settings(); s.options[id] ??= {}; return s.options[id]; },
+        save,
+        rest(kind) { if (featureState.get(id) !== 'error') setState(id, kind || null); },
+    };
+}
+
+async function startFeature(id) {
+    if (running.has(id)) return;
+    let mod;
+    try {
+        mod = await import(`${BASE}features/${id}.js`);
+    } catch (e) {
+        console.error(`[Breeze] ${id} 불러오기 실패`, e);
+        setState(id, 'error');   // 파일을 못 읽어도(실리태번 판이 달라 가져올 것이 없음) 켜진 것처럼 보이지 않게
+        return;
+    }
+    running.set(id, mod);
+    try { await mod.start?.(makeApi(id)); } catch (e) { console.error(`[Breeze] ${id} 시작 실패`, e); setState(id, 'error'); }
+}
+
+async function stopFeature(id) {
+    const mod = running.get(id);
+    if (!mod) return true;
+    if (typeof mod.stop !== 'function') return false;   // 새로고침해야 꺼짐
+    let left = false;   // 실리태번 공용 함수에 끼운 것을 못 뺌(우리 뒤에 다른 확장이 또 끼움) → 새로고침해야 완전히 꺼짐
+    try { left = (await mod.stop()) === false; } catch (e) { console.error(`[Breeze] ${id} 끄기 실패`, e); }
+    running.delete(id);
+    featureState.delete(id);   // 끄면 쉬는 중 · 오류 표시도 지움(다시 켜면 새로 판단)
+    if (left) return false;
+    return true;
+}
+
+// ───────── 설정 창 ─────────
+// 확장 설정 목록에는 ‘설정 열기’ 한 줄만 두고, 설정은 전용 창에서 한다: 왼쪽에 묶음, 오른쪽에 기능 카드(스위치 · 설명 · 세부 설정), 위에 검색.
+// 확장 설정 목록 안의 좁은 칸에 기능 스무 개와 옵션을 다 넣으면 길고 어수선해서 따로 뺐다.
+// 이름 앞 아이콘 없음(이름 뒤 물결 글자로 대신)
+const LOGO = '';
+const ALL = '전체', SERVER_TAB = '서버 플러그인';
+const SERVER_NAMES = { lazy_load: '프리셋 · 테마를 쓸 때만 불러오기', folder_cache: '바뀌지 않은 설정 폴더는 다시 읽지 않기', chat_cache: '바뀌지 않은 채팅은 다시 읽지 않기',
+    no_local_compression: '같은 컴퓨터에서는 압축 없이 보내기', regex_hook: '메시지별 정규식 유지용 연결 지점', tab_icon: '브라우저 탭 아이콘 바꾸기', loading_screen: '로딩 화면 파일 읽기' };
+// 마지막으로 본 묶음 · 펼친 세부 설정 · 스크롤 자리는 브라우저에 기억(창을 다시 열면 그 자리)
+const UI_KEY = 'breeze.ui';
+const uiSaved = (() => { try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch { return {}; } })();
+const ui = { tab: uiSaved.tab || ALL, query: '', open: new Set(uiSaved.open || []), quickOpen: new Set(uiSaved.quickOpen || []), scroll: uiSaved.scroll || 0 };
+const rememberUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify({ tab: ui.tab, open: [...ui.open], quickOpen: [...ui.quickOpen], scroll: dialog()?.querySelector('.etk-main')?.scrollTop ?? ui.scroll })); } catch { /* 저장소 막힘 */ } };
+const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const dialog = () => document.getElementById('etk_dialog');
+// 드롭다운에 꺼내 둔 기능(자주 켜고 끄는 것)
+const quick = () => (settings().quick ??= []);
+const onCount = (g) => FEATURES.filter(f => (g === ALL || f.group === g) && settings().enabled[f.id]).length;
+
+function navHtml() {
+    const item = (g, extra = '') => `<div class="etk-nav-item${g === ui.tab ? ' etk-active' : ''}" data-tab="${g}" tabindex="0"><span>${g}</span>${extra}</div>`;
+    const count = (g) => { const total = FEATURES.filter(f => g === ALL || f.group === g).length; return `<small>${onCount(g)} / ${total}</small>`; };
+    return item(ALL, count(ALL)) + GROUPS.map(g => item(g, count(g))).join('') + '<div class="etk-nav-gap"></div>' + item(SERVER_TAB, `<small class="etk-server-count">${serverCount}</small>`);
+}
+// 서버 플러그인 칸 숫자(작동 중 / 전체): 서버에 물어봐야 알아서 한 번 받아 두고 칸에 채움, 없으면 ‘없음’
+let serverCount = '', serverCountAsked = false;
+function setServerCount(features) {
+    serverCount = features ? `${Object.values(features).filter(v => v === 'on').length} / ${Object.keys(features).length}` : '없음';
+    dialog()?.querySelectorAll('.etk-server-count').forEach(el => { el.textContent = serverCount; });
+    dialog()?.querySelectorAll('.etk-sum-note').forEach(el => { el.textContent = serverCount === '없음' ? '설치 안 됨' : `작동 중 ${serverCount}`; });   // 요약판 서버 상자
+}
+async function askServerCount() {
+    if (serverCountAsked) return; serverCountAsked = true;
+    try { const res = await fetch('/api/plugins/breeze-server/status', { headers: ctx().getRequestHeaders() }); setServerCount(res.ok ? (await res.json()).features : null); } catch { setServerCount(null); }
+}
+
+function cardHtml(f) {
+    const on = !!settings().enabled[f.id];
+    return `
+    <div class="etk-card${on ? ' etk-on' : ''}" data-id="${f.id}">
+        <div class="etk-card-head">
+            <input type="checkbox" class="etk-check" ${on ? 'checked' : ''} title="${on ? '누르면 끄기' : '누르면 켜기'}" aria-label="${esc(f.name)}">
+            <div class="etk-card-text"><div class="etk-card-name">${esc(f.name)}</div>${f.desc ? `<div class="etk-card-desc">${esc(f.desc)}</div>` : ''}${stateHtml(f.id)}</div>
+            <div class="etk-card-tools">
+                ${f.hasAction ? `<div class="menu_button etk-run"${on ? '' : ' disabled'} title="${on ? '지금 실행' : '켜면 실행 가능'}"><i class="fa-solid fa-play"></i>실행</div>` : ''}
+                <div class="etk-tool etk-star fa-star ${quick().includes(f.id) ? 'fa-solid etk-on' : 'fa-regular'}" tabindex="0" title="확장 설정 목록의 breeze 칸에 꺼내 두기"></div>
+                ${f.hasOptions ? `<div class="etk-tool etk-more fa-solid fa-sliders${ui.open.has(f.id) && on ? ' etk-on' : ''}${on ? '' : ' etk-disabled'}" tabindex="0" title="${on ? '세부 설정' : '켜면 세부 설정 가능'}"></div>` : '<div class="etk-tool etk-tool-blank" aria-hidden="true"></div>'}
+            </div>
+        </div>
+        ${f.hasOptions && on && ui.open.has(f.id) ? `<div class="etk-options" data-options="${f.id}" data-title="${esc(f.name)}"></div>` : ''}
+    </div>`;
+}
+
+// 카드는 켜고 끄기 · 세부 설정 열고 닫기 · ☆ 가 바뀔 때만 새로 그리고, 묶음 고르기 · 검색은 이미 그린 카드를 숨기고 보이기만 함 —
+// 검색 한 글자 · 묶음 바꿀 때마다 전부 새로 그리면 펼쳐 둔 미리보기 창들이 매번 다시 떠서 느림
+let builtKey = null, anchor = null;
+const dialogKey = () => JSON.stringify([FEATURES.map(f => !!settings().enabled[f.id]), [...ui.open].sort(), quick()]);
+const fresh = new Set();   // 다시 켠 기능: 세부 설정을 새로 그림(꺼진 동안 남겨 둔 칸은 옛 상태)
+function renderDialog() {
+    rememberUi();
+    const root = dialog();
+    if (!root) return;
+    root.querySelector('.etk-nav').innerHTML = navHtml();
+    askServerCount();
+    const body = root.querySelector('.etk-main');
+    const q = ui.query.trim().toLowerCase();
+    if (!q && ui.tab === ALL) { renderSummary(body); return; }
+    if (!q && ui.tab === SERVER_TAB) {
+        builtKey = null;
+        body.innerHTML = '<div class="etk-server">확인 중…</div>';
+        showServerStatus();
+        return;
+    }
+    const key = dialogKey();
+    if (key !== builtKey || !body.querySelector('.etk-card')) {
+        builtKey = key;
+        // 이미 펼쳐 둔 세부 설정은 떼어 두었다가 다시 끼움(새로 연 칸만 그림)
+        const kept = new Map([...body.querySelectorAll('[data-options]')].filter(el => !fresh.has(el.dataset.options)).map(el => [el.dataset.options, el]));
+        fresh.clear();
+        // 보던 자리 기억: 화면 맨 위에 걸친 카드와 그 위치 — 다시 그리면 창이 맨 위로 튀었음(기능을 켜고 끌 때)
+        const top = body.getBoundingClientRect().top;
+        const anchorEl = [...body.querySelectorAll('.etk-card:not([hidden])')].find(c => c.getBoundingClientRect().bottom > top);
+        anchor = anchorEl ? { id: anchorEl.dataset.id, off: anchorEl.getBoundingClientRect().top - top } : null;
+        body.innerHTML = GROUPS.map(g => {
+            const items = FEATURES.filter(f => f.group === g);
+            return items.length ? `<div class="etk-section" data-group="${g}">${g}</div>${items.map(cardHtml).join('')}` : '';
+        }).join('') + '<div class="etk-empty" hidden>맞는 기능 0개</div>';
+        for (const id of ui.open) {
+            const slot = body.querySelector(`[data-options="${id}"]`);
+            if (!slot) continue;
+            const old = kept.get(id);
+            if (old) { slot.replaceWith(old); continue; }
+            renderOptions(id);
+            slot.classList.add('etk-opening');   // 새로 연 칸만 부드럽게 펼침
+            slot.addEventListener('animationend', () => slot.classList.remove('etk-opening'), { once: true });
+        }
+    }
+    // 찾는 중에는 묶음과 상관없이 전부에서 찾음
+    const show = new Set(FEATURES.filter(f => (q ? koMatch(`${f.name} ${f.desc}`, q) : ui.tab === ALL || f.group === ui.tab)).map(f => f.id));
+    const many = !!q || ui.tab === ALL;
+    let first = true;
+    for (const sec of body.querySelectorAll('.etk-section')) {
+        const g = sec.dataset.group;
+        const any = FEATURES.some(f => f.group === g && show.has(f.id));
+        sec.hidden = !many || !any;
+        sec.classList.toggle('etk-first', !sec.hidden && first);
+        if (!sec.hidden) first = false;
+    }
+    for (const card of body.querySelectorAll('.etk-card[data-id]')) card.hidden = !show.has(card.dataset.id);
+    body.querySelector('.etk-empty').hidden = show.size > 0;
+    if (anchor) {   // 다시 그렸으면 보던 카드를 같은 자리로
+        const el = body.querySelector(`.etk-card[data-id="${anchor.id}"]`);
+        if (el && !el.hidden) body.scrollTop += el.getBoundingClientRect().top - body.getBoundingClientRect().top - anchor.off;
+        anchor = null;
+    }
+}
+
+// 전체 설정 내보내기 · 불러오기. 그림 · 글꼴 같은 사용자 파일은 파일 안에 함께 넣고,
+// 테마 전용 스크립트가 켜는 태번 헬퍼 스크립트도 내용째 넣어 다른 컴퓨터에서도 그대로 돌게 함
+function linkedHelperScripts() {
+    const th = window.TavernHelper;
+    const ids = new Set((settings().options.theme_scripts?.rules || []).flatMap(r => (r.th || []).map(x => x.id)));
+    if (!th?.getScriptTrees || !ids.size) return [];
+    let trees = []; try { trees = th.getScriptTrees({ type: 'global' }) || []; } catch { return []; }
+    return trees.flatMap(t => t.type === 'folder' ? t.scripts || [] : [t]).filter(x => ids.has(x.id)).map(({ name, content, info, button, data }) => ({ name, content, info, button, data }));
+}
+async function exportAll() {
+    const s = settings();
+    const data = await embedFiles({ kind: 'breeze-settings', enabled: s.enabled, options: s.options, quick: s.quick || [], helperScripts: linkedHelperScripts() });
+    downloadText('breeze-settings.json', JSON.stringify(data, null, 1));
+}
+async function importAll() {
+    const file = await pickFile('.json,application/json');
+    if (!file) return;
+    let data = null;
+    try { data = JSON.parse(await file.text()); } catch { /* 아래에서 알림 */ }
+    if (data?.kind !== 'breeze-settings' || typeof data.enabled !== 'object') return toastr.warning('breeze 설정 파일이 아니에요.', 'breeze');
+    const c = ctx();
+    const on = FEATURES.filter(f => data.enabled[f.id]).length;
+    const r = await c.callGenericPopup(`<h3>breeze 설정을 불러올까요?</h3>지금 설정이 파일의 것으로 바뀌어요(켜는 기능 ${on}개).`, c.POPUP_TYPE.CONFIRM, '', { okButton: '불러오기', cancelButton: '취소' });
+    if (r !== c.POPUP_RESULT.AFFIRMATIVE) return;
+    try { data = await restoreFiles(data); } catch (e) { console.error('[Breeze] 설정 파일 올리기', e); return toastr.error('그림 · 글꼴 파일을 올리지 못했어요.', 'breeze'); }
+    // 테마 전용 스크립트가 켜는 태번 헬퍼 스크립트: 같은 이름이 없으면 꺼진 채로 만듦(규칙은 이름으로 다시 찾음)
+    const th = window.TavernHelper;
+    if (th?.updateScriptTreesWith && Array.isArray(data.helperScripts) && data.helperScripts.length) {
+        let have = new Set();
+        try { have = new Set((th.getScriptTrees({ type: 'global' }) || []).flatMap(t => t.type === 'folder' ? t.scripts || [] : [t]).map(x => x.name)); } catch { /* 없음 */ }
+        const add = data.helperScripts.filter(x => x?.name && !have.has(x.name)).map(x => ({ type: 'script', enabled: false, name: x.name, id: crypto.randomUUID(), content: String(x.content || ''), info: String(x.info || ''), button: x.button || { enabled: true, buttons: [] }, data: x.data || {}, export_with: { data: true, button: true } }));
+        if (add.length) { try { await th.updateScriptTreesWith(t => [...t, ...add], { type: 'global' }); } catch (e) { console.warn('[Breeze] 태번 헬퍼 스크립트 만들기', e); } }
+    }
+    // 켜진 기능은 껐다가 새 설정으로 다시 켬(끌 수 없는 기능은 새로고침해야 새 설정이 먹음)
+    let reload = 0;
+    for (const f of FEATURES) if (running.has(f.id) && !(await stopFeature(f.id))) reload++;
+    const s = settings();
+    s.enabled = Object.fromEntries(FEATURES.map(f => [f.id, !!data.enabled[f.id]]));
+    s.options = data.options && typeof data.options === 'object' ? data.options : {};
+    // 규칙에 적힌 스크립트 id 는 내보낸 컴퓨터의 것 — 이름으로 이 컴퓨터의 id 를 찾아 바꿔 둠(안 바꾸면 규칙을 고칠 때 같은 스크립트를 하나 더 만듦)
+    try {
+        const now = new Map((th?.getScriptTrees?.({ type: 'global' }) || []).flatMap(t => t.type === 'folder' ? t.scripts || [] : [t]).map(x => [x.name, x.id]));
+        for (const r of s.options.theme_scripts?.rules || []) {
+            const own = (r.th || []).find(x => x.id === r.thOwn);
+            for (const ref of r.th || []) if (now.has(ref.name)) ref.id = now.get(ref.name);
+            if (own) r.thOwn = own.id;
+        }
+    } catch { /* 이름으로 다시 찾음 */ }
+    s.quick = Array.isArray(data.quick) ? data.quick.filter(id => FEATURES.some(f => f.id === id)) : [];
+    delete s.paused;
+    save();
+    for (const f of FEATURES) if (s.enabled[f.id]) await startFeature(f.id);
+    builtKey = null;
+    renderDialog(); refreshLauncher();
+    toastr.success(reload ? `불러왔어요. ${reload}개는 새로고침해야 새 설정이 먹어요.` : '불러왔어요.', 'breeze');
+}
+
+async function togglePause() {
+    const s = settings();
+    if (s.paused?.length) {
+        const ids = s.paused;
+        delete s.paused; save();
+        for (const id of ids) await setEnabled(id, true);
+    } else {
+        const ids = FEATURES.filter(f => s.enabled[f.id]).map(f => f.id);
+        if (!ids.length) return;
+        s.paused = ids; save();
+        let reload = 0;
+        for (const id of ids) if (!(await setEnabled(id, false))) reload++;
+        if (reload) toastr.info(`${reload}개는 새로고침해야 완전히 꺼져요.`, 'breeze');
+    }
+    renderDialog();
+}
+
+// ‘전체’ = 요약판: 묶음마다 상자 하나, 기능 이름과 켜짐만(설명 · 세부 설정은 묶음 탭에서).
+// 체크칸은 그 자리에서 켜고 끄고, 이름을 누르면 그 묶음 탭의 그 기능 칸으로(세부 설정이 있으면 펼침)
+function renderSummary(body) {
+    builtKey = null;
+    const keep = body.querySelector('.etk-summary') ? body.scrollTop : null;
+    const box = (g) => {
+        const items = FEATURES.filter(f => f.group === g);
+        const rows = items.map(f => { const on = !!settings().enabled[f.id]; const st = on && featureState.get(f.id); return `<label class="etk-sum-item${on ? '' : ' etk-sum-off'}${st ? ' etk-sum-rest' : ''}"${st ? ` title="${esc(STATE_TEXT[st])}"` : ''}><input type="checkbox" class="etk-sum-check" data-id="${f.id}"${on ? ' checked' : ''} aria-label="${esc(f.name)}"><span class="etk-sum-name" data-go="${f.id}" tabindex="0">${esc(f.name)}</span></label>`; }).join('');
+        return `<div class="etk-sum-box"><div class="etk-sum-head" data-tab="${esc(g)}" tabindex="0"><span>${esc(g)}</span><small>${onCount(g)} / ${items.length}</small></div>${rows}</div>`;
+    };
+    const srv = serverCount === '' ? '확인 중' : serverCount === '없음' ? '설치 안 됨' : `작동 중 ${serverCount}`;
+    // 전부 잠시 끄기: 이상할 때 breeze 탓인지 가려 보려고. 켜 둔 목록을 기억했다가 다시 켜기로 그대로 돌림
+    const paused = settings().paused;
+    const pauseRow = paused?.length
+        ? `<div class="etk-sum-pause etk-sum-paused"><div class="menu_button etk-pause-btn"><i class="fa-solid fa-play"></i>다시 켜기</div><span>breeze 기능 ${paused.length}개를 잠시 꺼 뒀어요.</span></div>`
+        : `<div class="etk-sum-pause"><div class="menu_button etk-pause-btn"><i class="fa-solid fa-pause"></i>전부 잠시 끄기</div><span>문제가 breeze 때문인지 볼 때 써요.</span></div>`;
+    // 설정 내보내기 · 불러오기는 자주 쓰지 않아 잠시 끄기 줄 오른쪽 구석에 작게
+    const io = '<div class="etk-sum-io"><i class="fa-solid fa-file-export etk-all-export interactable" tabindex="0" title="설정 내보내기(켜 둔 기능 · 기능마다 고른 설정 전부)"></i><i class="fa-solid fa-file-import etk-all-import interactable" tabindex="0" title="설정 불러오기"></i></div>';
+    body.innerHTML = `${pauseRow.replace(/<\/div>$/, `${io}</div>`)}<div class="etk-summary">${GROUPS.map(box).join('')}<div class="etk-sum-box"><div class="etk-sum-head" data-tab="${esc(SERVER_TAB)}" tabindex="0"><span>${esc(SERVER_TAB)}</span><small class="etk-server-count">${esc(serverCount)}</small></div><div class="etk-sum-note">${esc(srv)}</div></div></div>`;
+    if (keep !== null) body.scrollTop = keep;
+    body.querySelector('.etk-pause-btn').addEventListener('click', togglePause);
+    body.querySelector('.etk-all-export').addEventListener('click', exportAll);
+    body.querySelector('.etk-all-import').addEventListener('click', importAll);
+    const summary = body.querySelector('.etk-summary');
+    summary.addEventListener('change', async (e) => {
+        const cb = e.target.closest('.etk-sum-check');
+        if (!cb) return;
+        cb.closest('.etk-sum-item').classList.toggle('etk-sum-off', !cb.checked);
+        await setEnabled(cb.dataset.id, cb.checked);   // 숫자 · 왼쪽 묶음 개수도 다시 그려짐
+    });
+    const go = (el) => {
+        const head = el.closest('.etk-sum-head'), name = el.closest('.etk-sum-name');
+        if (head) { ui.tab = head.dataset.tab; renderDialog(); dialog()?.querySelector('.etk-main')?.scrollTo(0, 0); return true; }
+        if (!name) return false;
+        const f = FEATURES.find(x => x.id === name.dataset.go);
+        ui.tab = f.group;
+        if (f.hasOptions && settings().enabled[f.id]) ui.open.add(f.id);
+        renderDialog();
+        dialog()?.querySelector(`.etk-card[data-id="${f.id}"]`)?.scrollIntoView({ block: 'start' });
+        return true;
+    };
+    summary.addEventListener('click', (e) => { if (e.target.closest('.etk-sum-name')) e.preventDefault(); go(e.target); });   // 이름을 눌러도 체크칸이 바뀌지 않게
+    summary.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && go(e.target)) e.preventDefault(); });
+}
+
+// 펼쳐 둔 기능의 세부 설정 칸을 그린다(그 기능 파일이 options(box, api) 를 내보냄).
+function renderOptions(id) {
+    const box = dialog()?.querySelector(`[data-options="${id}"]`);
+    if (!box) return;
+    box.replaceChildren();
+    const mod = running.get(id);
+    if (mod?.options && settings().enabled[id]) mod.options(box, makeApi(id));
+}
+
+async function setEnabled(id, on) {
+    settings().enabled[id] = !!on;
+    save();
+    let stopped = true;
+    if (on) await startFeature(id);
+    else stopped = await stopFeature(id);   // 열어 둔 세부 설정은 끄기 전에 접혀 있음(change 처리에서), 열어 둔 표시는 남김
+    refreshCard(id);
+    refreshLauncher();
+    return stopped;
+}
+
+// 켜고 끈 그 카드만 새로 그림(창 전체를 다시 그리면 펼쳐 둔 다른 세부 설정이 새로 불러져 버벅임)
+function refreshCard(id) {
+    const root = dialog(), card = root?.querySelector(`.etk-main .etk-card[data-id="${id}"]`), f = FEATURES.find(x => x.id === id);
+    if (!card || !f) { renderDialog(); return; }
+    const tmp = document.createElement('div');
+    tmp.innerHTML = cardHtml(f);
+    const next = tmp.firstElementChild;
+    next.hidden = card.hidden;
+    card.replaceWith(next);
+    const slot = next.querySelector(`[data-options="${id}"]`);
+    if (slot) {
+        renderOptions(id);
+        slot.classList.add('etk-opening');
+        slot.addEventListener('animationend', () => slot.classList.remove('etk-opening'), { once: true });
+    }
+    root.querySelector('.etk-nav').innerHTML = navHtml();
+    builtKey = dialogKey();
+    rememberUi();
+}
+
+function openDialog() {
+    if (dialog()) return;
+    const root = document.createElement('div');
+    root.id = 'etk_dialog';
+    root.className = 'etk-settings';
+    root.innerHTML = `
+    <div class="etk-window" role="dialog" aria-label="breeze 설정">
+        <div class="etk-top">
+            <div class="etk-brand">${LOGO}<b class="etk-brand-name">breeze</b></div>
+            <div class="etk-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="기능 찾기"></div>
+            <div class="etk-close fa-solid fa-xmark interactable" tabindex="0" title="닫기"></div>
+        </div>
+        <div class="etk-layout"><div class="etk-nav"></div><div class="etk-main"></div></div>
+    </div>`;
+    document.body.append(root);
+    renderDialog();
+    const main = root.querySelector('.etk-main');
+    main.scrollTop = ui.scroll;
+    main.addEventListener('scroll', () => { ui.scroll = main.scrollTop; }, { passive: true });
+    const close = () => { rememberUi(); root.remove(); document.removeEventListener('keydown', onKey, true); };
+    const onKey = (e) => { if (e.key === 'Escape' && !e.target.closest?.('.popup')) { e.stopPropagation(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    root.addEventListener('mousedown', (e) => { if (e.target === root) close(); });
+    root.querySelector('.etk-search input').addEventListener('input', (e) => { ui.query = e.target.value; renderDialog(); });
+    root.addEventListener('click', (e) => {
+        if (e.target.closest('.etk-close')) return close();
+        const nav = e.target.closest('.etk-nav-item');
+        if (nav) { ui.tab = nav.dataset.tab; ui.query = ''; root.querySelector('.etk-search input').value = ''; ui.scroll = 0; root.querySelector('.etk-main').scrollTop = 0; renderDialog(); return; }
+        const card = e.target.closest('.etk-card');
+        if (!card) return;
+        const id = card.dataset.id;
+        if (e.target.closest('.etk-star')) {
+            const list = quick(), at = list.indexOf(id);
+            at >= 0 ? list.splice(at, 1) : list.push(id);
+            // ☆ 모양만 바꿈(전체를 다시 그리면 펼쳐 둔 미리보기 창들이 새로 불러져 버벅였음)
+            const star = e.target.closest('.etk-star'), pinned = at < 0;
+            star.classList.toggle('fa-solid', pinned); star.classList.toggle('fa-regular', !pinned); star.classList.toggle('etk-on', pinned);
+            builtKey = dialogKey();
+            save(); refreshLauncher();
+            return;
+        }
+        if (e.target.closest('.etk-run')) { if (settings().enabled[id]) running.get(id)?.open?.(); return; }
+        const more = e.target.closest('.etk-more');
+        if (more) {
+            // 그 카드만 손댐(카드를 통째로 다시 그리면 닫을 때 멈춤). 닫을 때도 높이를 줄이며 접음
+            if (!settings().enabled[id]) return;
+            const card = more.closest('.etk-card');
+            if (ui.open.has(id)) {
+                ui.open.delete(id); rememberUi(); builtKey = dialogKey(); more.classList.remove('etk-on');
+                const box = card.querySelector(`[data-options="${id}"]`);
+                // 지우지 않고 숨겨 둠 — 미리보기 창들을 지우는 데도 0.1초쯤 멈췄고, 다시 열 때 새로 그리지 않아도 됨
+                if (box) { box.style.overflow = 'clip'; box.querySelectorAll('iframe').forEach(fr => { fr.style.visibility = 'hidden'; }); box.animate([{ height: `${box.offsetHeight}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 200, easing: 'ease-in' }).onfinish = () => { box.hidden = true; box.style.overflow = ''; box.querySelectorAll('iframe').forEach(fr => { fr.style.visibility = ''; }); }; }   // 접는 동안 미리보기 창을 안 그려 덜 버벅이게
+            } else {
+                ui.open.add(id); rememberUi(); builtKey = dialogKey(); more.classList.add('etk-on');
+                let slot = card.querySelector(`[data-options="${id}"]`);
+                if (slot) slot.hidden = false;   // 숨겨 둔 칸을 그대로 꺼냄
+                else {
+                    card.insertAdjacentHTML('beforeend', `<div class="etk-options" data-options="${id}" data-title="${esc(FEATURES.find(f => f.id === id)?.name || '')}"></div>`);
+                    slot = card.querySelector(`[data-options="${id}"]`);
+                    renderOptions(id);
+                }
+                slot.classList.add('etk-opening');
+                slot.addEventListener('animationend', () => slot.classList.remove('etk-opening'), { once: true });
+            }
+        }
+    });
+    root.addEventListener('change', async (e) => {
+        if (!e.target.classList.contains('etk-check')) return;
+        const card = e.target.closest('.etk-card'), id = card.dataset.id;
+        // 끌 때: 펼쳐 둔 세부 설정은 툭 닫지 않고 높이를 줄이며 접은 뒤 끔(꺼진 채 남겨 두니 기능 모양이 빠져 회색 칸으로 깨져 보였음).
+        // 열어 둔 표시는 남겨서 다시 켜면 세부 설정이 다시 펼쳐짐
+        const box = !e.target.checked && card.querySelector('[data-options]:not([hidden])');
+        if (box) { box.style.overflow = 'clip'; box.querySelectorAll('iframe').forEach(fr => { fr.style.visibility = 'hidden'; }); await box.animate([{ height: `${box.offsetHeight}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 200, easing: 'ease-in' }).finished.catch(() => {}); box.hidden = true; }
+        if (!(await setEnabled(id, e.target.checked))) toastr.info(`‘${FEATURES.find(f => f.id === id)?.name}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
+    });
+}
+
+// 이름 옆 알약 = 확장 버전(manifest.json) 그대로(1.0.0)
+let version = null;
+async function showVersion(el) {
+    if (!el) return;
+    if (version === null) {
+        try { version = String((await (await fetch(`${BASE}manifest.json`, { cache: 'no-cache' })).json()).version || ''); } catch { version = ''; }
+    }
+    el.textContent = version;
+    el.hidden = !version;
+}
+
+// 확장 설정 목록에 두는 칸: 다른 확장처럼 접는 줄. 펼치면 ★ 로 꺼내 둔 기능의 스위치가 바로 나오고, 맨 아래에 전체 설정 열기.
+function refreshLauncher() {
+    const root = document.getElementById('etk_settings');
+    if (!root) return;
+    showVersion(root.querySelector('.etk-launch-count'));
+    const s = settings();
+    const rows = quick().map(id => FEATURES.find(f => f.id === id)).filter(Boolean).map(f => {
+        const on = !!s.enabled[f.id], open = on && ui.quickOpen.has(f.id);
+        return `
+        <div class="etk-quick-row" data-id="${f.id}">
+            <label class="checkbox_label"><input type="checkbox" ${on ? 'checked' : ''}><span>${esc(f.name)}</span></label>
+            ${f.hasOptions && on ? `<div class="etk-quick-more fa-solid ${open ? 'fa-chevron-up' : 'fa-chevron-down'} interactable" tabindex="0" title="세부 설정 ${open ? '접기' : '펼치기'}"></div>` : ''}
+        </div>
+        ${open ? `<div class="etk-options etk-quick-options" data-quick-options="${f.id}"></div>` : ''}`;
+    }).join('');
+    const kept = new Map([...root.querySelectorAll('[data-quick-options]')].map(el => [el.dataset.quickOptions, el]));
+    root.querySelector('.etk-quick').innerHTML = rows || '<small class="etk-quick-empty">자주 쓰는 기능은 설정 창에서 ☆ 를 눌러 여기에 꺼내 두기</small>';
+    // 펼친 세부 설정은 이 칸 안에 바로 그림(설정 창을 열지 않고 고치기). 이미 그려 둔 칸은 그대로 다시 끼움
+    for (const box of root.querySelectorAll('[data-quick-options]')) {
+        const id = box.dataset.quickOptions, mod = running.get(id), old = kept.get(id);
+        if (old) { box.replaceWith(old); continue; }
+        if (mod?.options) mod.options(box, makeApi(id));
+    }
+}
+// 확장 목록의 이름은 테마 글꼴을 따라 굵기 500 으로 그리는데, 글꼴에 500 이 없으면 400 으로 내려가 가늘게 보임.
+//   그럴 때만 글자 테두리를 얇게 더해 중간 굵기처럼 보이게 함. 웹글꼴은 선언된 굵기로, 깔린 글꼴은 400 · 500 폭이 같은지로 판단.
+function fitBrandWeight() {
+    const el = document.querySelector('#etk_settings .etk-brand-name');
+    if (!el) return;
+    const cs = getComputedStyle(el), family = cs.fontFamily.split(',')[0].trim().replace(/^["']|["']$/g, '');
+    const faces = [...document.fonts].filter(f => f.family.replace(/^["']|["']$/g, '') === family);
+    let lacks500;
+    if (faces.length) {
+        lacks500 = !faces.some(f => { const [lo, hi = lo] = String(f.weight).split(/\s+/).map(w => (w === 'normal' ? 400 : w === 'bold' ? 700 : Number(w))); return lo <= 500 && 500 <= hi; });
+    } else {
+        const c = document.createElement('canvas').getContext('2d');
+        const width = (w) => { c.font = `${cs.fontStyle} ${w} 40px ${cs.fontFamily}`; return c.measureText('breeze').width; };
+        lacks500 = width(400) === width(500) && width(400) !== width(700);
+    }
+    el.classList.toggle('etk-weight-fill', lacks500);
+}
+
+function addLauncher() {
+    if (document.getElementById('etk_settings')) return;
+    document.getElementById('extensions_settings2')?.insertAdjacentHTML('beforeend', `
+    <div id="etk_settings" class="etk-settings etk-launcher">
+        <div class="inline-drawer">
+            <div class="inline-drawer-toggle inline-drawer-header">
+                <b class="etk-brand">${LOGO}<span class="etk-brand-name">breeze<i class="etk-brand-wave" aria-hidden="true"></i></span><span class="etk-launch-count"></span></b>
+                <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+            </div>
+            <div class="inline-drawer-content">
+                <div class="etk-quick"></div>
+                <div class="menu_button etk-open"><i class="fa-solid fa-sliders"></i>전체 설정 열기</div>
+            </div>
+        </div>
+    </div>`);
+    const root = document.getElementById('etk_settings');
+    root.querySelector('.etk-open').addEventListener('click', openDialog);
+    root.addEventListener('change', async (e) => {
+        const row = e.target.closest('.etk-quick-row');
+        if (!row || e.target.type !== 'checkbox') return;
+        if (!(await setEnabled(row.dataset.id, e.target.checked))) toastr.info(`‘${FEATURES.find(f => f.id === row.dataset.id)?.name}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
+    });
+    root.addEventListener('click', (e) => {
+        const more = e.target.closest('.etk-quick-more');
+        if (!more) return;
+        const id = more.closest('.etk-quick-row').dataset.id;
+        const box = root.querySelector(`[data-quick-options="${id}"]`);
+        if (box) {
+            // 닫기: 높이를 줄인 뒤에 지움
+            ui.quickOpen.delete(id);
+            more.classList.replace('fa-chevron-up', 'fa-chevron-down');
+            box.animate([{ height: `${box.offsetHeight}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 180, easing: 'ease-in' }).onfinish = () => refreshLauncher();
+            return;
+        }
+        ui.quickOpen.add(id);
+        rememberUi();
+        refreshLauncher();
+        const opened = root.querySelector(`[data-quick-options="${id}"]`);
+        opened?.animate([{ height: '0px', opacity: 0 }, { height: `${opened.offsetHeight}px`, opacity: 1 }], { duration: 220, easing: 'ease-out' });
+    });
+    refreshLauncher();
+}
+
+// 짝 서버 플러그인 상태: 있으면 기능마다 작동 중 · 휴식 · 꺼짐, 없으면 넣는 법
+// 탭 아이콘 칸: 지금 아이콘 보여 주기 · 그림 고르기 · 원래대로
+async function wireTabIcon(el) {
+    const box = el.querySelector('.etk-tab-icon-tools');
+    if (!box) return;
+    const { setTabIcon, resetTabIcon, hasTabIcon } = await import('./lib/tab-icon.js');
+    const { pickFile } = await import('./lib/files.js');
+    const refresh = async () => {
+        box.querySelector('.etk-tab-icon-now').src = `/favicon.ico?v=${Date.now()}`;
+        box.querySelector('.etk-tab-icon-reset').hidden = !(await hasTabIcon());
+    };
+    box.querySelector('.etk-tab-icon-pick').addEventListener('click', async () => {
+        const file = await pickFile('image/*');
+        if (!file) return;
+        try { await setTabIcon(file); toastr.success('탭 아이콘을 바꿨어요.'); } catch (e) { toastr.error(String(e.message || e)); }
+        refresh();
+    });
+    box.querySelector('.etk-tab-icon-reset').addEventListener('click', async () => { await resetTabIcon(); refresh(); });
+    refresh();
+}
+
+// 서버 플러그인 설치 명령(실리태번 폴더에서 실행, 다시 깔아도 같은 자리에 덮어씀 — plugins 에 이미 있으면 그 안에 한 겹 더 생기던 것을 고침): 확장이 어느 사용자 폴더 · 어느 이름으로 깔렸든 찾아서 plugins 로 복사하고 config.yaml 의 서버 플러그인 허용을 켠다
+const INSTALL_CMD = {
+    unix: `mkdir -p plugins/breeze-server && cp -R "$(find . -path ./node_modules -prune -o -path ./plugins -prune -o -type d -path '*/server-plugin/breeze-server' -print | head -1)/." plugins/breeze-server/ && sed -i.bak 's/^enableServerPlugins:.*/enableServerPlugins: true/' config.yaml`,
+    win: `Copy-Item -Recurse -Force (Get-ChildItem data,public -Recurse -Directory -Filter breeze-server | Where-Object FullName -like '*server-plugin*' | Select-Object -First 1).FullName plugins; (Get-Content config.yaml -Encoding UTF8) -replace '^enableServerPlugins:.*','enableServerPlugins: true' | Set-Content config.yaml -Encoding UTF8`,
+};
+async function showServerStatus() {
+    const el = dialog()?.querySelector('.etk-server');
+    if (!el) return;
+    let features = null, wanted = null;
+    try {
+        const res = await fetch('/api/plugins/breeze-server/status', { headers: ctx().getRequestHeaders() });
+        if (res.ok) { const data = await res.json(); features = data.features; wanted = data.wanted || null; }
+    } catch { /* 없음 */ }
+    if (!dialog()?.contains(el)) return;
+    setServerCount(features);
+    if (!features) {
+        el.innerHTML = `<div class="etk-card"><div class="etk-card-name">서버 플러그인이 없어요</div><div class="etk-card-desc">없어도 다른 기능은 그대로 쓸 수 있어요.</div></div>
+            <div class="etk-section">넣으면 추가되는 것</div>
+            ${Object.values(SERVER_NAMES).map(n => `<div class="etk-server-row"><i class="fa-solid fa-plus"></i><span>${n}</span></div>`).join('')}
+            <div class="etk-section">설치</div>
+            <div class="etk-card-desc">실리태번 폴더에서 터미널을 열고 아래 명령을 붙여 넣은 다음, 서버를 재실행하세요.</div>
+            <div class="etk-install"><div class="etk-install-os"><span class="etk-os-tab interactable" tabindex="0" data-os="unix">맥 · 리눅스 · 안드로이드(Termux)</span><span class="etk-os-tab interactable" tabindex="0" data-os="win">윈도우 (PowerShell)</span></div><pre class="etk-install-cmd"></pre><div class="etk-install-foot"><div class="menu_button etk-install-copy"><i class="fa-solid fa-copy"></i> 복사</div></div></div>
+            <details class="etk-advanced"><summary>직접 하기</summary><ol class="etk-steps"><li>확장 폴더의 <code>server-plugin/breeze-server</code> 를 실리태번 <code>plugins</code> 폴더로 복사</li><li><code>config.yaml</code> 의 <code>enableServerPlugins</code> 를 <code>true</code> 로</li><li>서버 재시작</li></ol></details>`;
+        const pre = el.querySelector('.etk-install-cmd');
+        const pick = (os) => { pre.textContent = INSTALL_CMD[os]; el.querySelectorAll('.etk-os-tab').forEach(t => t.classList.toggle('etk-on', t.dataset.os === os)); };
+        el.querySelectorAll('.etk-os-tab').forEach(t => t.addEventListener('click', () => pick(t.dataset.os)));
+        // 처음 펼칠 칸: 이 화면을 보는 기기로 짐작. 안드로이드(Termux)도 리눅스 명령이라 같은 칸
+        pick(/Win/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent) ? 'win' : 'unix');
+        el.querySelector('.etk-install-copy').addEventListener('click', async (e) => {
+            const text = pre.textContent;
+            // 보안 연결이 아닌 주소(같은 공유기의 다른 기기)에서는 복사 기능이 없어서 글 상자를 골라 복사
+            try { await navigator.clipboard.writeText(text); } catch { const ta = document.createElement('textarea'); ta.value = text; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+            const ic = e.currentTarget.querySelector('i'); ic.classList.replace('fa-copy', 'fa-check'); setTimeout(() => ic.classList.replace('fa-check', 'fa-copy'), 1500);
+        });
+        return;
+    }
+    const row = ([k, v]) => {
+        const st = v === 'on' ? ['fa-circle-check etk-ok', '작동 중'] : v.startsWith('mismatch') ? ['fa-circle-pause etk-warn', '쉬는 중'] : ['fa-circle-minus', v.startsWith('off (') ? `꺼짐 (${v.slice(5, -1)})` : '꺼짐'];
+        const tools = k === 'tab_icon' && v === 'on' ? '<div class="etk-tab-icon-tools" title="지금 탭 아이콘"><img class="etk-tab-icon-now" alt=""><div class="menu_button etk-tab-icon-pick" title="그림을 골라 탭 · 홈 화면 아이콘으로 써요. 바뀌기까지 시간이 걸릴 수 있어요"><i class="fa-solid fa-image"></i> 그림 고르기</div><div class="menu_button etk-tab-icon-reset" hidden>원래대로</div></div>' : '';
+        // 앞의 동그라미 = 켜고 끄기(서버를 다음에 켤 때 쓸지 — 플러그인 config.json). 서버 쪽 기능은 서버가 켜질 때 한 번 끼워서, 바꾸면 서버를 다시 켜야 먹음
+        const want = wanted ? wanted[k] !== false : null, nowOn = v !== 'off' && !v.startsWith('off (');
+        const icon = want === null ? st[0] : !want ? 'fa-circle-minus' : v.startsWith('mismatch') ? 'fa-circle-pause etk-warn' : 'fa-circle-check etk-ok';
+        const toggle = want === null ? '' : ` etk-server-toggle interactable" tabindex="0" role="switch" aria-checked="${want}" data-name="${esc(k)}" data-on="${want}" title="${want ? '누르면 끄기' : '누르면 켜기'}`;
+        const pending = want !== null && want !== nowOn ? `<small class="etk-server-pending">서버를 다시 켜면 ${want ? '켜져요' : '꺼져요'}</small>` : '';
+        return `<div class="etk-server-row${tools ? ' etk-has-tools' : ''}"><i class="fa-solid ${icon}${toggle}"></i><span>${SERVER_NAMES[k] || k}</span><small>${esc(st[1])}</small>${pending}${tools}</div>`;
+    };
+    el.innerHTML = `<div class="etk-card"><div class="etk-card-name">서버 플러그인 설치 완료</div><div class="etk-card-desc">아래 기능은 실리태번 서버 쪽에서 돌아가요.</div></div>
+        ${Object.entries(features).sort(([a], [b]) => (a === 'tab_icon') - (b === 'tab_icon')).map(row).join('')}
+        <div class="etk-card-desc etk-note">‘쉬는 중’으로 보이는 기능은 실리태번이 업데이트되면서 기능이 들어갈 자리가 바뀌어 멈춘 상태예요.<br>그 기능만 빠지고 실리태번과 나머지 기능은 그대로 돌아가요.</div>`;
+    wireTabIcon(el);
+    el.querySelectorAll('.etk-server-toggle').forEach(cb => cb.addEventListener('click', async () => {
+        try {
+            const res = await fetch('/api/plugins/breeze-server/features', { method: 'POST', headers: ctx().getRequestHeaders(), body: JSON.stringify({ name: cb.dataset.name, on: cb.dataset.on !== 'true' }) });
+            if (!res.ok) throw new Error(String(res.status));
+        } catch (e) { console.warn('[Breeze] 서버 기능 켜고 끄기', e); toastr.error('서버 플러그인 설정을 바꾸지 못했어요.', 'breeze'); }
+        showServerStatus();
+    }));
+}
+
+// 다른 코드(시험 · 다른 확장)가 기능을 켜고 끄거나 세부 설정을 열 수 있게
+globalThis[Symbol.for('breeze.api')] = {
+    features: () => FEATURES.map(f => f.id),
+    isOn: (id) => !!settings().enabled[id],
+    set: (id, on) => setEnabled(id, on),
+    openSettings: openDialog,
+    openOptions(id) {
+        const f = FEATURES.find(x => x.id === id);
+        if (!f) return;
+        openDialog();
+        ui.tab = f.group; ui.query = ''; ui.open.add(id);
+        renderDialog();
+        dialog()?.querySelector(`.etk-card[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest' });
+    },
+};
+
+jQuery(async () => {
+    onThemeCss(() => requestAnimationFrame(fitBrandWeight));
+    await loadStore().catch(error => console.warn('[Breeze] 설정 파일 읽기', error));
+    const s = settings();
+    await Promise.all(FEATURES.filter(f => s.enabled[f.id]).map(f => startFeature(f.id)));
+    addLauncher();
+    fitBrandWeight();
+});

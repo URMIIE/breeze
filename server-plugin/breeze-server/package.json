@@ -1,0 +1,7 @@
+{
+    "name": "breeze-server",
+    "version": "0.1.0",
+    "type": "module",
+    "main": "index.mjs",
+    "license": "AGPL-3.0"
+}
