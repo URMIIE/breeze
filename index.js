@@ -533,6 +533,25 @@ async function showVersion(el) {
     }
     el.textContent = version;
     el.hidden = !version;
+    el.title = '업데이트 내역';
+    // 새 판의 내역을 아직 안 봤으면 NEW 표시 — 한 번 열어 보면 사라짐(본 판은 설정 seenLog 에 적음)
+    el.classList.toggle('etk-new', !!version && settings().seenLog !== version);
+    if (!el.dataset.log) {
+        el.dataset.log = '1';
+        // 알약은 접는 줄 안에 있어서, 누르면 줄이 펼쳐지지 않게 막고 내역만 띄움
+        el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); showChangelog(); });
+    }
+}
+
+// 업데이트 내역(CHANGELOG.json: 판마다 날짜와 바뀐 것)
+async function showChangelog() {
+    let log = [];
+    try { log = await (await fetch(`${BASE}CHANGELOG.json`, { cache: 'no-cache' })).json(); } catch { /* 아래에서 알림 */ }
+    if (!Array.isArray(log) || !log.length) return toastr.info('업데이트 내역을 읽지 못했어요.', 'breeze');
+    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3>${log.map(v => `<section><div class="etk-cl-head"><b>${esc(v.version)}</b><small>${esc(v.date || '')}</small></div><ul>${(v.items || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>`).join('')}</div>`;
+    if (version && settings().seenLog !== version) { settings().seenLog = version; save(); }
+    document.querySelectorAll('.etk-launch-count.etk-new').forEach(x => x.classList.remove('etk-new'));
+    ctx().callGenericPopup(html, ctx().POPUP_TYPE.TEXT, '', { wide: false, allowVerticalScrolling: true });
 }
 
 // 확장 설정 목록에 두는 칸: 다른 확장처럼 접는 줄. 펼치면 ★ 로 꺼내 둔 기능의 스위치가 바로 나오고, 맨 아래에 전체 설정 열기.
