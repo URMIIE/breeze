@@ -24,7 +24,19 @@ function applyHidden() {
 }
 
 const pins = () => (api.options().pins ??= []).filter(k => /^[\w-]+$/.test(k));
-const keyOf = btn => [...btn.classList].find(c => !GENERIC.has(c) && !c.startsWith('fa-')) || '';
+// 버튼 종류 이름: 실리태번 · 확장이 붙인 첫 클래스. 한 확장이 버튼 여러 개에 같은 클래스를 붙이면(아이콘 · data 값으로만 다름)
+//   모두 한 종류로 묶여 하나만 목록에 뜨고 숨기기 · 꺼내기가 함께 움직였음 → 같은 메시지 안에 같은 클래스 버튼이 또 있으면 아이콘(없으면 data 값)까지 붙여 가름
+const ICON_STYLE = /^fa-(solid|regular|brands|light|thin|duotone|fw|lg|xs|sm)$/;
+const keyOf = btn => {
+    const base = [...btn.classList].find(c => !GENERIC.has(c) && !c.startsWith('fa-')) || '';
+    if (!base) return '';
+    const scope = btn.closest('.mes, #message_template') || btn.parentElement;
+    if (!scope || scope.querySelectorAll(`.${CSS.escape(base)}`).length < 2) return base;
+    const icon = [...btn.classList].find(c => c.startsWith('fa-') && !ICON_STYLE.test(c));
+    if (icon) return `${base}.${icon}`;
+    const data = [...btn.attributes].find(a => a.name.startsWith('data-') && a.value && /^[\w-]+$/.test(a.value));
+    return data ? `${base}[${data.name}="${data.value}"]` : base;
+};
 const hiddenByOthers = btn => getComputedStyle(btn).display === 'none';
 
 // 이름은 실리태번 · 그 확장이 버튼에 붙여 둔 이름(화면 언어로 번역된 것)만 씀(따로 지어 붙이면 실제 이름과 달라짐)

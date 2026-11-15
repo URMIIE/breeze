@@ -115,7 +115,9 @@ function isPopup(el) {
     if (!r.width || !r.height || r.width > innerWidth * 0.8) return false;
     // 버튼 줄만 모은다 — 결과 카드 · 설명 창처럼 글이 많거나 키 큰 것은 그 확장이 보여 주려는 내용이라 숨기면 안 됨
     if (r.height > 140 || (el.textContent || '').trim().length > 80) return false;
-    return el.matches(clickable) || !!el.querySelector(clickable);
+    if (el.matches(clickable) || el.querySelector(clickable)) return true;
+    // 버튼을 div 로 만들고 손가락 모양(cursor: pointer)만 준 확장도 있음 — 안쪽 몇 개만 보고 판단
+    return [...el.querySelectorAll('*')].slice(0, 40).some(c => getComputedStyle(c).cursor === 'pointer');
 }
 
 const skippedShown = () => skipped().some(sel => { try { return [...document.querySelectorAll(sel)].some(el => el.getBoundingClientRect().width > 0 && getComputedStyle(el).visibility !== 'hidden'); } catch { return false; } });
@@ -171,7 +173,16 @@ function press(btn) {
 }
 
 // 우리 버튼을 눌러도 고른 글이 풀리지 않게
+// 다른 확장이 '바깥을 누르면 내 창 닫기'를 문서 단계(capture)에 걸어 두면, ⋯ 를 누르는 순간 모아 둔 그 창이 지워져 메뉴에서 빠졌음
+//   → 우리 버튼을 누를 땐 창(window) 단계에서 먼저 막아 그 처리가 돌지 않게
+let shieldOn = false;
+function shieldEarly() {
+    if (shieldOn) return;
+    shieldOn = true;
+    for (const t of ['pointerdown', 'mousedown', 'touchstart']) window.addEventListener(t, e => { if (e.target instanceof Element && e.target.closest(`.${OURS}-chip, .${OURS}-menu`)) e.stopImmediatePropagation(); }, true);
+}
 function shielded(el) {
+    shieldEarly();
     for (const t of ['pointerdown', 'mousedown']) el.addEventListener(t, e => { e.preventDefault(); e.stopPropagation(); });
     for (const t of ['pointerup', 'mouseup', 'click', 'touchend']) el.addEventListener(t, e => e.stopPropagation());
 }
@@ -222,6 +233,15 @@ function iconOf(b) {
     return c.outerHTML;
 }
 
+// 떠 있는 창 안의 누를 것: 버튼 꼴(button · role · interactable)이 없으면 손가락 모양(cursor: pointer) 칸 가운데 가장 바깥 것만
+function pressables(pop) {
+    if (pop.matches(clickable)) return [pop];
+    const real = [...pop.querySelectorAll(clickable)];
+    if (real.length) return real;
+    const pointer = [...pop.querySelectorAll('*')].filter(c => getComputedStyle(c).cursor === 'pointer');
+    return pointer.filter(c => !pointer.some(o => o !== c && o.contains(c)));
+}
+
 function openMenu() {
     if (!pickedRange()) return hideAll();
     menu = document.createElement('div');
@@ -233,9 +253,13 @@ function openMenu() {
     menuCount = pops.length;
     for (const p of pops) p.classList.add(`${OURS}-hidden`);
     for (const pop of pops.sort((x, y) => rank(x) - rank(y))) {
-        const buttons = pop.matches(clickable) ? [pop] : [...pop.querySelectorAll(clickable)];
+        const buttons = pressables(pop);
         const named = [], dots = [];
-        for (const b of buttons) (labelOf(b) ? named : dots).push(b);
+        // 글자 없이 바탕색만 다른 동그라미(색 고르기)는 이름(title)이 붙어 있어도 한 줄에 모음 — 색마다 한 줄씩 나오면 메뉴가 길어졌음
+        const bg = (b) => getComputedStyle(b).backgroundColor;
+        const bare = buttons.filter(b => !(b.textContent || '').trim() && !/rgba\(0, 0, 0, 0\)|transparent/.test(bg(b)));
+        const colorRow = new Set(bare.map(bg)).size >= 2 ? new Set(bare) : new Set();
+        for (const b of buttons) (labelOf(b) && !colorRow.has(b) ? named : dots).push(b);
         for (const b of named) {
             const item = document.createElement('button');
             item.type = 'button';
@@ -260,6 +284,7 @@ function openMenu() {
                 dot.className = `${OURS}-dot`;
                 dot.style.background = getComputedStyle(b).backgroundColor;
                 dot.innerHTML = iconOf(b);
+                if (labelOf(b)) dot.title = labelOf(b).split('\n')[0];
                 dot.addEventListener('click', () => { hideAll(); press(b); });
                 row.append(dot);
             }
