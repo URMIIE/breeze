@@ -548,10 +548,43 @@ async function showChangelog() {
     let log = [];
     try { log = await (await fetch(`${BASE}CHANGELOG.json`, { cache: 'no-cache' })).json(); } catch { /* 아래에서 알림 */ }
     if (!Array.isArray(log) || !log.length) return toastr.info('업데이트 내역을 읽지 못했어요.', 'breeze');
-    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3>${log.map(v => `<section><div class="etk-cl-head"><b>${esc(v.version)}</b><small>${esc(v.date || '')}</small></div><ul>${(v.items || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul></section>`).join('')}</div>`;
+    // 판마다 items(한 목록) 또는 groups(기능별로 접는 묶음: {title, items})
+    const list = items => `<ul>${(items || []).map(t => `<li>${esc(t)}</li>`).join('')}</ul>`;
+    const body = v => Array.isArray(v.groups)
+        ? v.groups.map(g => `<details class="etk-cl-group"><summary>${esc(g.title)}<small>${(g.items || []).length}</small></summary><div class="etk-cl-body">${list(g.items)}</div></details>`).join('')
+        : list(v.items);
+    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3><div class="etk-cl-scroll">${log.map((v, i) => {
+        const head = `<b>${esc(v.version)}</b><small>${esc(v.date || '')}</small>`;
+        // 이번 판은 펼쳐 두고, 지난 판은 판째로 접어 둠
+        return i ? `<details class="etk-cl-old"><summary class="etk-cl-head">${head}</summary><div class="etk-cl-body">${body(v)}</div></details>` : `<section><div class="etk-cl-head">${head}</div>${body(v)}</section>`;
+    }).join('')}</div><a class="etk-cl-all" href="https://github.com/URMIIE/breeze/blob/main/CHANGELOG.md" target="_blank" rel="noopener">지난 내역 전체 보기</a></div>`;
     if (version && settings().seenLog !== version) { settings().seenLog = version; save(); }
+    if (!showChangelog.wired) {
+        showChangelog.wired = true;
+        document.addEventListener('click', foldChangelog, true);
+    }
     document.querySelectorAll('.etk-launch-count.etk-new').forEach(x => x.classList.remove('etk-new'));
     ctx().callGenericPopup(html, ctx().POPUP_TYPE.TEXT, '', { wide: false, allowVerticalScrolling: true });
+}
+
+// 내역 창의 접는 묶음: 그냥 details 는 한 번에 툭 열리고 닫혀서, 높이를 부드럽게 늘이고 줄이며 열고 닫음
+function foldChangelog(e) {
+    const summary = e.target instanceof Element && e.target.closest('.etk-changelog summary');
+    const d = summary?.parentElement, b = d?.querySelector(':scope > .etk-cl-body');
+    if (!b || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    e.preventDefault();
+    b.getAnimations().forEach(a => a.cancel());
+    const from = d.open ? b.offsetHeight : 0;
+    const closing = d.open && !d.classList.contains('etk-cl-closing');
+    if (closing) {
+        d.classList.add('etk-cl-closing');
+        const a = b.animate([{ height: `${from}px`, opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 200, easing: 'cubic-bezier(.4,0,.2,1)' });
+        a.onfinish = () => { d.open = false; d.classList.remove('etk-cl-closing'); };
+    } else {
+        d.classList.remove('etk-cl-closing');
+        d.open = true;
+        b.animate([{ height: `${from}px`, opacity: from ? 1 : 0 }, { height: `${b.scrollHeight}px`, opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
 }
 
 // 확장 설정 목록에 두는 칸: 다른 확장처럼 접는 줄. 펼치면 ★ 로 꺼내 둔 기능의 스위치가 바로 나오고, 맨 아래에 전체 설정 열기.

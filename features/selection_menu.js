@@ -93,7 +93,15 @@ function learn(list) {
     if (added) { api.save(); applyKnown(); }
 }
 
+// 휴대폰은 ⋯ 를 손가락으로 누르는 순간 브라우저가 고른 글을 먼저 풀어 버려서, 고른 글이 없다고 보고 ⋯ 를 치워 누를 수가 없었음
+//   → ⋯ · 메뉴를 누르기 시작한 뒤 잠깐(holdUntil)은 마지막으로 고른 글을 그대로 쓴다
+let holdUntil = 0, lastPick = null;
 function pickedRange() {
+    const got = livePick();
+    if (got) return (lastPick = got);
+    return Date.now() < holdUntil && lastPick?.range ? lastPick : null;
+}
+function livePick() {
     const sel = getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
     const range = sel.getRangeAt(0);
@@ -164,6 +172,8 @@ function popups() {
 }
 
 function press(btn) {
+    const sel = getSelection();
+    if (sel && sel.isCollapsed && lastPick?.range) { try { sel.removeAllRanges(); sel.addRange(lastPick.range); } catch { /* 지워진 글 */ } }
     const opt = { bubbles: true, cancelable: true, button: 0 };
     btn.dispatchEvent(new PointerEvent('pointerdown', opt));
     btn.dispatchEvent(new MouseEvent('mousedown', opt));
@@ -179,7 +189,7 @@ let shieldOn = false;
 function shieldEarly() {
     if (shieldOn) return;
     shieldOn = true;
-    for (const t of ['pointerdown', 'mousedown', 'touchstart']) window.addEventListener(t, e => { if (e.target instanceof Element && e.target.closest(`.${OURS}-chip, .${OURS}-menu`)) e.stopImmediatePropagation(); }, true);
+    for (const t of ['pointerdown', 'mousedown', 'touchstart']) window.addEventListener(t, e => { if (e.target instanceof Element && e.target.closest(`.${OURS}-chip, .${OURS}-menu`)) { holdUntil = Date.now() + 1500; e.stopImmediatePropagation(); } }, true);
 }
 function shielded(el) {
     shieldEarly();
@@ -317,12 +327,44 @@ function showChip() {
         document.body.append(chip);
     }
     const rects = got.range.getClientRects();
-    placeNear(chip, rects[rects.length - 1] || got.range.getBoundingClientRect());
+    const last = rects[rects.length - 1] || got.range.getBoundingClientRect();
+    placeNear(chip, last);
+    // 손가락 기기: 휴대폰이 띄우는 자체 메뉴(복사하기 · 찾아보기 등)는 고른 글 바로 위나 바로 아래 줄에 떠서 ⋯ 를 덮었음.
+    //   그 메뉴는 고른 글이 걸친 줄 높이에는 안 뜨므로, ⋯ 를 고른 글 마지막 줄 높이에 두고 그 줄 끝 오른쪽(자리가 없으면 화면 오른쪽 끝)에 둠.
+    //   자체 메뉴도 그대로 남아서 복사 같은 건 원래대로 쓸 수 있음
+    if (matchMedia('(pointer: coarse)').matches) {
+        const w = chip.offsetWidth, h = chip.offsetHeight, pad = 8;
+        chip.style.top = `${Math.max(pad, last.top + (last.height - h) / 2)}px`;
+        chip.style.left = `${Math.min(last.right + 22, innerWidth - w - pad)}px`;
+    }
     dodge(); setTimeout(dodge, 150); setTimeout(dodge, 450);
+}
+
+// 휴대폰은 길게 누르면 낱말 하나가 먼저 골라지고, 그 순간 다른 확장들이 그 낱말을 기억해 둠. 그 뒤 손잡이로 넓힌 건 화면 신호(손 뗌)가 없어서
+//   확장들이 모름 → 메뉴에서 형광펜을 골라도 처음 낱말에만 칠해졌음. 고른 글이 바뀌고 잠깐 멈추면 그 끝에서 손을 뗀 것처럼 알려 다시 읽게 함
+let resyncT = 0, resyncedKey = '';
+function resyncTouchPick() {
+    clearTimeout(resyncT);
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    resyncT = setTimeout(() => {
+        const got = livePick();
+        if (!got) return;
+        const key = `${got.range.startOffset}:${got.range.endOffset}:${got.range.toString().length}`;
+        if (key === resyncedKey) return;
+        resyncedKey = key;
+        const rects = got.range.getClientRects(), r = rects[rects.length - 1];
+        if (!r) return;
+        const target = got.range.endContainer.nodeType === 1 ? got.range.endContainer : got.range.endContainer.parentElement;
+        const at = { bubbles: true, cancelable: true, clientX: r.right - 1, clientY: r.top + r.height / 2 };
+        try { target.dispatchEvent(new PointerEvent('pointerup', { ...at, pointerType: 'touch' })); } catch { /* 없음 */ }
+        target.dispatchEvent(new MouseEvent('mouseup', at));
+        try { target.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true })); } catch { /* 없음 */ }
+    }, 450);
 }
 
 function onSelection() {
     if (!active) return;
+    resyncTouchPick();
     if (!pickedRange()) { if (!menu) { hideAll(); watchStop(); } return; }
     watchStart();
     clearTimeout(timer);

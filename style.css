@@ -446,11 +446,27 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 #etk_dialog .etk-sum-head .etk-sum-all { margin-left: auto; font-size: .8em; font-weight: 400; opacity: .6; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--SmartThemeBorderColor, currentColor); white-space: nowrap; }
 #etk_dialog .etk-sum-head .etk-sum-all:hover { opacity: 1; }
 .etk-launcher .etk-launch-count, #etk_settings .etk-launch-count { cursor: pointer; }
-.etk-changelog { text-align: left; }
-.etk-changelog h3 { margin: 0 0 10px; }
-.etk-changelog section + section { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); }
+.etk-changelog { text-align: left; display: flex; flex-direction: column; height: min(72vh, 620px); }
+.etk-changelog h3 { margin: 0 0 10px; flex: none; }
+.etk-changelog .etk-cl-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .etk-changelog .etk-cl-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .etk-changelog .etk-cl-head small { opacity: .65; }
 .etk-changelog ul { margin: 0; padding-left: 1.2em; }
 .etk-changelog li { margin: 3px 0; line-height: 1.5; }
+.etk-changelog .etk-cl-body { overflow: hidden; }
+.etk-changelog summary { cursor: pointer; list-style: none; display: flex; align-items: baseline; gap: 8px; }
+.etk-changelog summary::-webkit-details-marker { display: none; }
+.etk-changelog summary::before { content: "▶"; font-size: .7em; opacity: .6; transition: transform .22s cubic-bezier(.2,.8,.2,1); }
+.etk-changelog details[open]:not(.etk-cl-closing) > summary::before { transform: rotate(90deg); }
+.etk-changelog .etk-cl-group { margin: 6px 0; border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); border-radius: 8px; padding: 0 10px; }
+.etk-changelog .etk-cl-group summary { padding: 7px 0; font-weight: 600; }
+.etk-changelog .etk-cl-group summary small { opacity: .6; font-weight: 400; }
+.etk-changelog .etk-cl-group ul { padding-bottom: 8px; }
+.etk-changelog .etk-cl-old { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); }
+.etk-changelog .etk-cl-old > .etk-cl-body > ul { padding-top: 4px; }
+.etk-changelog .etk-cl-all { flex: none; display: inline-block; margin-top: 10px; font-size: .9em; opacity: .8; }
 .etk-launch-count.etk-new::after { content: "NEW"; margin-left: .45em; padding: 0 .4em; border-radius: 999px; font-size: .72em; font-weight: 700; letter-spacing: .02em; background: #e5484d; color: #fff; vertical-align: .1em; }
+.etk-settings .etk-tone-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.etk-settings .etk-tone-chip { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 10px; font-size: .9em; }
+.etk-settings .etk-tone-chip i { font-size: .8em; }
+.etk-settings .etk-sound-list { padding-bottom: 4px; }

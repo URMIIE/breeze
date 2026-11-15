@@ -39,27 +39,54 @@ function beep(tone) {
     ours = true;
     try {
         const file = String(tone || '').startsWith('file:') ? tone.slice(5) : '';
-        if (file.trim()) {
-            const a = new Audio(file.trim());
-            a.volume = volume;
-            a.play().catch(() => {});
-            return;
-        }
-        ctxAudio ??= new (window.AudioContext || window.webkitAudioContext)();
-        if (ctxAudio.state === 'suspended') ctxAudio.resume?.();
+        // 누른 순간(▶ · 고르기)이면 멈춘 소리 길을 새로 열 수 있음
+        const gesture = !!navigator.userActivation?.isActive;
+        // 아이폰 기본 모드: 소리 길이 멈춰 있을 때(다른 탭에 있었거나 노래에 밀림) 누르지 않은 채 깨우면, 사파리가 그 깨우기를 미뤄 뒀다가
+        // 다음에 화면을 누르는 순간 실행해서 그때 듣던 노래가 끊겼음 → 이럴 땐 이번 알림음은 건너뜀
+        if (quietIOS() && !gesture && ctxAudio?.state !== 'running') { log('아이폰: 소리 길이 멈춰 있어 이번 알림음은 건너뜀'); return; }
+        const ctx = liveCtx(gesture);
+        if (file.trim()) { playFile(ctx, file.trim(), volume); return; }
+        if (ctx.state !== 'running') { ctx.resume?.().then(() => playNotes(ctx, tone, o, volume)).catch(() => {}); return; }
+        playNotes(ctx, tone, o, volume);
+    } finally { ours = false; }
+}
+// 내 소리 파일도 알림음 소리 길(Web Audio)로 튼다: 파일을 그냥 틀면(new Audio) 아이폰은 크기를 못 바꾸고(늘 기기 음량) 듣던 노래도 멈춤.
+// 한 번 읽은 파일은 기억해 둠. 읽지 못하는 파일(다른 사이트 주소 등)만 예전처럼 그냥 튼다
+const fileBuffers = new Map();
+function playFile(ctx, url, volume) {
+    const fallback = () => { const a = new Audio(url); a.volume = volume; ours = true; try { a.play().catch(() => {}); } finally { ours = false; } };
+    let buf = fileBuffers.get(url);
+    if (!buf) {
+        buf = fetch(url).then(r => { if (!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+            .then(data => new Promise((ok, no) => ctx.decodeAudioData(data, ok, no)));
+        fileBuffers.set(url, buf);
+        buf.catch(() => fileBuffers.delete(url));
+    }
+    Promise.all([buf, ctx.state === 'running' ? null : ctx.resume?.()]).then(([decoded]) => {
+        const src = ctx.createBufferSource(), gain = ctx.createGain();
+        src.buffer = decoded;
+        // 휴대폰은 노래에 묻혀서 파일 원래 크기의 2배까지(더 키우면 소리가 찢어짐)
+        gain.gain.value = volume * (isPhone() ? 2 : 1);
+        src.connect(gain).connect(ctx.destination);
+        src.start();
+    }).catch(fallback);
+}
+function playNotes(ctxAudio, tone, o, volume) {
+    {
         const t0 = ctxAudio.currentTime;
         for (const [freq, at] of (TONES[tone] || TONES[o.tone] || TONES.chime).notes) {
             const osc = ctxAudio.createOscillator(), gain = ctxAudio.createGain();
             osc.type = 'sine';
             osc.frequency.value = freq;
             gain.gain.setValueAtTime(0, t0 + at);
-            gain.gain.linearRampToValueAtTime(volume * 0.3, t0 + at + 0.02);
+            // 휴대폰은 노래와 섞여 울리면 묻혀서 더 크게(컴퓨터의 3배까지)
+            gain.gain.linearRampToValueAtTime(volume * (isPhone() ? 0.9 : 0.3), t0 + at + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.25);
             osc.connect(gain).connect(ctxAudio.destination);
             osc.start(t0 + at);
             osc.stop(t0 + at + 0.27);
         }
-    } finally { ours = false; }
+    }
 }
 
 // 같은 일을 두 신호가 알릴 때(답이 그려짐 + 다른 확장의 ‘답 붙음’) 한 번만
@@ -67,7 +94,8 @@ const COOLDOWN = 1500;
 let lastBeep = 0;
 function notify(why = '', key = 'main') {
     if (api.ctx().powerUserSettings?.play_message_sound) return;   // 실리태번이 직접 냄
-    if (api.options().onlyHidden && document.visibilityState === 'visible' && document.hasFocus()) return;
+    // 아이폰에서 노래와 섞어 울릴 땐 다른 탭에선 소리를 못 내서 이 칸은 안 씀(켜 두면 아예 안 울림)
+    if (api.options().onlyHidden && !quietIOS() && document.visibilityState === 'visible' && document.hasFocus()) return;
     const at = Date.now();
     if (at - lastBeep < COOLDOWN) { log(`${why} — 방금 울려서 건너뜀`); return; }
     lastBeep = at;
@@ -83,16 +111,42 @@ const log = (why) => { if (why) console.debug(`[Breeze] 완료 소리: ${why}`);
 const SILENT = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQQAAAAAAA==';
 const isPhone = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 let keepAudio = null, unlocked = false;
-const keepOn = () => api?.options().keepAlive !== false && isPhone();
+// 아이폰: 무음 '파일'을 틀면 페이지가 음악 트는 쪽으로 바뀌어 듣던 노래가 멈춤(대신 무음 모드에서도 울림).
+//   기본은 무음 파일 없이 알림음 소리 길(Web Audio, 다른 소리와 섞임 · 무음 모드면 안 남)만 연다. 사파리는 손을 뗄 때(touchend · click) 연 것만 인정함.
+//   무음 파일로 페이지를 붙잡으면 노래가 멈춰서, 아이폰에선 다른 탭 · 화면 꺼짐 관련 칸을 아예 두지 않음(탭을 보고 있을 때만 울림)
+const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+const quietIOS = () => isIOS();
+const keepOn = () => api?.options().keepAlive !== false && isPhone() && !quietIOS();
 function keepAudioEl() {
     if (!keepAudio) { keepAudio = new Audio(SILENT); keepAudio.loop = true; keepAudio.setAttribute('playsinline', ''); }
     return keepAudio;
 }
 function playSilently(a) { ours = true; try { return a.play(); } finally { ours = false; } }
-function unlock() {
+// 아이폰(아이폰의 모든 브라우저가 같은 엔진)은 손을 뗀 순간(touchend · click) 소리 길에서 실제로 무언가를 한 번 틀어야 소리 길을 열어 줌 → 열릴 때까지 아주 짧은 빈 소리를 틂.
+// 열린 뒤 멈춘 소리 길을 새로 만들어 다시 열면 듣던 노래가 누를 때마다 끊겨서(그 페이지가 이미 음악 트는 쪽으로 바뀌어 있으면) 새로 만들지 않음
+const newCtx = () => new (window.AudioContext || window.webkitAudioContext)();
+let opened = false;
+function liveCtx(gesture) {
+    ctxAudio ??= newCtx();
+    if (ctxAudio.state === 'running') { opened = true; return ctxAudio; }
+    if (gesture && isIOS() && !opened) {
+        const src = ctxAudio.createBufferSource();
+        src.buffer = ctxAudio.createBuffer(1, 1, 22050);
+        src.connect(ctxAudio.destination);
+        src.start(0);
+        ctxAudio.resume?.().then(() => { if (ctxAudio.state === 'running') opened = true; }).catch(() => {});
+    } else ctxAudio.resume?.().catch(() => {});
+    return ctxAudio;
+}
+function unlock(e) {
+    if (isIOS()) {
+        // 사파리는 손을 뗄 때 연 것만 인정함. 한 번 열린 뒤엔 누를 때 아무것도 안 함: 노래에 밀려 멈춘 소리 길을 누를 때마다 깨우면 그때마다 노래가 끊겼음
+        if (e && !['touchend', 'click', 'keydown'].includes(e.type)) return;
+        if (!opened) try { liveCtx(true); } catch { /* 소리 장치 없음 */ }
+    }
     if (unlocked || !keepOn()) return;
     unlocked = true;
-    try { ctxAudio ??= new (window.AudioContext || window.webkitAudioContext)(); ctxAudio.resume?.(); } catch { /* 소리 장치 없음 */ }
+    try { liveCtx(false); } catch { /* 소리 장치 없음 */ }
     const a = keepAudioEl();
     playSilently(a)?.then(() => { if (!busy()) a.pause(); }).catch(() => { unlocked = false; });
 }
@@ -396,7 +450,7 @@ export function start(a) {
         })();
     });
     on(ev.CHAT_CHANGED, () => { resetMain(); chatOpenedAt = Date.now(); settle(); });
-    for (const t of ['pointerdown', 'touchstart', 'keydown']) document.addEventListener(t, unlock, { capture: true, passive: true });
+    for (const t of ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown']) document.addEventListener(t, unlock, { capture: true, passive: true });
     listenSignals();
     if (!origPlay) {
         origPlay = HTMLMediaElement.prototype.play;
@@ -416,7 +470,7 @@ export function stop() {
     listeners = []; docListeners = [];
     // 우리 뒤에 다른 확장이 또 감쌌으면 그쪽 것을 지우지 않게 그대로 둠(시각만 적는 감싸개라 남아도 하는 일 없음)
     if (origPlay && HTMLMediaElement.prototype.play === myPlay) { HTMLMediaElement.prototype.play = origPlay; origPlay = null; myPlay = null; }
-    for (const t of ['pointerdown', 'touchstart', 'keydown']) document.removeEventListener(t, unlock, { capture: true });
+    for (const t of ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown']) document.removeEventListener(t, unlock, { capture: true });
     keepAudio?.pause(); busy = () => false;
     unwrapFetch();
 }
@@ -435,9 +489,10 @@ export function options(box, a) {
         <div class="etk-form">
             <label>크기</label><input type="range" min="0" max="1" step="0.05" data-k="volume">
         </div>
-        <label class="checkbox_label"><input type="checkbox" data-k="onlyHidden"><span>다른 창을 볼 때만</span></label>
-        <label class="checkbox_label" title="휴대폰은 화면을 끄면 페이지 소리를 멈춰서 알림이 안 날 수 있어요. 메시지를 만드는 동안 들리지 않는 소리를 틀어 두어 페이지가 잠들지 않게 해요"><input type="checkbox" data-k="keepAlive"><span>휴대폰 화면을 꺼도 알림 받기</span></label>
-        <div class="etk-sub">내 알림음</div>
+        ${isIOS() ? '' : `<label class="checkbox_label" title="실리태번 탭을 보고 있을 땐 안 울리고, 다른 탭 · 다른 앱을 보거나 창을 내려 두었을 때만 울려요"><input type="checkbox" data-k="onlyHidden"><span>실리태번을 안 보고 있을 때만 울리기</span></label>
+        <label class="checkbox_label" title="휴대폰은 화면을 끄면 페이지 소리를 멈춰서 알림이 안 날 수 있어요. 메시지를 만드는 동안 들리지 않는 소리를 틀어 두어 페이지가 잠들지 않게 해요"><input type="checkbox" data-k="keepAlive"><span>휴대폰 화면을 꺼도 알림 받기</span></label>`}
+        <div class="etk-sub">알림음</div>
+        <div class="etk-tone-chips"></div>
         <div class="etk-sound-list"></div>
         <div class="menu_button etk-sound-pick"><i class="fa-solid fa-plus"></i> 알림음 파일 올리기</div>
         <div class="etk-sub">알림 설정</div>
@@ -473,7 +528,20 @@ export function options(box, a) {
     const drawMain = () => { const m = box.querySelector('.etk-sig-main'); m.replaceChildren(sigRow('main', '메시지 생성이 끝날 때', { fixed: true })); };
     const drawSounds = () => {
         const list = box.querySelector('.etk-sound-list');
-        list.innerHTML = mySounds().length ? '' : '<div class="etk-empty-line">아직 없어요.</div>';
+        list.innerHTML = '';
+        // 기본 알림음은 한 줄에 작은 ▶ 칩으로(한 줄씩 두면 칸을 너무 차지했음), 아래 목록엔 올린 파일만
+        const chips = box.querySelector('.etk-tone-chips');
+        chips.innerHTML = '';
+        for (const [k, v] of Object.entries(TONES)) {
+            const c = document.createElement('div');
+            c.className = 'menu_button etk-tone-chip';
+            c.title = '듣기';
+            c.innerHTML = '<i class="fa-solid fa-play"></i><span></span>';
+            c.querySelector('span').textContent = v.name;
+            c.addEventListener('click', () => beep(k));
+            chips.append(c);
+        }
+        list.hidden = !mySounds().length;
         for (const x of mySounds()) {
             const row = document.createElement('div');
             row.className = 'etk-flex etk-sound-row';
@@ -496,13 +564,13 @@ export function options(box, a) {
     };
     const show = () => {
         f('volume').value = o.volume ?? 0.5;
-        f('onlyHidden').checked = !!o.onlyHidden;
-        f('keepAlive').checked = o.keepAlive !== false;
+        if (f('onlyHidden')) f('onlyHidden').checked = !!o.onlyHidden;
+        if (f('keepAlive')) f('keepAlive').checked = o.keepAlive !== false;
     };
     show();
     f('volume').addEventListener('input', e => { o.volume = Number(e.target.value); a.save(); });
-    f('onlyHidden').addEventListener('change', e => { o.onlyHidden = e.target.checked; a.save(); });
-    f('keepAlive').addEventListener('change', e => { o.keepAlive = e.target.checked; a.save(); if (!o.keepAlive) keepAudio?.pause(); });
+    f('onlyHidden')?.addEventListener('change', e => { o.onlyHidden = e.target.checked; a.save(); });
+    f('keepAlive')?.addEventListener('change', e => { o.keepAlive = e.target.checked; a.save(); if (!o.keepAlive) keepAudio?.pause(); });
     const host = box.querySelector('.etk-signals');
     let scanning = true;
     const drawSignals = async () => {
@@ -519,7 +587,9 @@ export function options(box, a) {
         if (!pairs.size && !(o.aiSeen || []).length) { host.innerHTML = scanning ? '<small>깔린 확장에서 찾는 중…</small>' : ''; return; }
         const rows = await Promise.all([...pairs].map(async ([key, [folder, j]]) => [key, `${await extensionName(folder)}: ${j}이 끝날 때`]));
         if (!host.isConnected) return;
-        const aiRows = await Promise.all((o.aiSeen || []).map(async folder => [`${folder}#ai`, `${await extensionName(folder)}: AI 요청이 끝날 때`]));
+        // 자기 끝 신호를 내는 확장은 그 신호 줄이 같은 일(번역 요청 끝 = 번역 끝)을 알려서 'AI 요청' 줄은 뺌. 이미 켜 둔 줄은 끌 수 있게 남김
+        const hasOwn = new Set([...pairs.values()].map(([folder]) => folder));
+        const aiRows = await Promise.all((o.aiSeen || []).filter(folder => !hasOwn.has(folder) || (o.aiOn || []).includes(folder)).map(async folder => [`${folder}#ai`, `${await extensionName(folder)}: AI 요청이 끝날 때`]));
         if (!host.isConnected) return;
         host.replaceChildren(...rows.sort((x, y) => x[1].localeCompare(y[1])).map(([key, label]) => sigRow(key, label)),
             ...aiRows.sort((x, y) => x[1].localeCompare(y[1])).map(([key, label]) => sigRow(key, label, { ai: true })));
