@@ -443,3 +443,5 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 #etk_dialog .etk-install-foot .menu_button { margin: 0; padding: 4px 12px; font-size: .85em; display: inline-flex; align-items: center; gap: 6px; }
 #etk_settings .etk-brand-name.etk-weight-fill { -webkit-text-stroke: .045em currentColor !important; }   /* 글꼴에 500 이 없을 때 400 위에 얇은 테두리로 중간 굵기 */
 .etk-settings .etk-theme-rows { max-height: 12em; overflow-y: auto; }   /* 고른 테마가 많아도 설정 칸이 끝없이 길어지지 않게 */
+#etk_dialog .etk-sum-head .etk-sum-all { margin-left: auto; font-size: .8em; font-weight: 400; opacity: .6; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--SmartThemeBorderColor, currentColor); white-space: nowrap; }
+#etk_dialog .etk-sum-head .etk-sum-all:hover { opacity: 1; }

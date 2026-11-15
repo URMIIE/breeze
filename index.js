@@ -356,19 +356,24 @@ function renderSummary(body) {
     const box = (g) => {
         const items = FEATURES.filter(f => f.group === g);
         const rows = items.map(f => { const on = !!settings().enabled[f.id]; const st = on && featureState.get(f.id); return `<label class="etk-sum-item${on ? '' : ' etk-sum-off'}${st ? ' etk-sum-rest' : ''}"${st ? ` title="${esc(STATE_TEXT[st])}"` : ''}><input type="checkbox" class="etk-sum-check" data-id="${f.id}"${on ? ' checked' : ''} aria-label="${esc(f.name)}"><span class="etk-sum-name" data-go="${f.id}" tabindex="0">${esc(f.name)}</span></label>`; }).join('');
-        return `<div class="etk-sum-box"><div class="etk-sum-head" data-tab="${esc(g)}" tabindex="0"><span>${esc(g)}</span><small>${onCount(g)} / ${items.length}</small></div>${rows}</div>`;
+        const all = onCount(g) === items.length;
+        return `<div class="etk-sum-box"><div class="etk-sum-head" data-tab="${esc(g)}" tabindex="0"><span>${esc(g)}</span><span class="etk-sum-all interactable" data-group="${esc(g)}" data-on="${all ? 0 : 1}" tabindex="0">${all ? '모두 끄기' : '모두 켜기'}</span><small>${onCount(g)} / ${items.length}</small></div>${rows}</div>`;
     };
     const srv = serverCount === '' ? '확인 중' : serverCount === '없음' ? '설치 안 됨' : `작동 중 ${serverCount}`;
     // 전부 잠시 끄기: 이상할 때 breeze 탓인지 가려 보려고. 켜 둔 목록을 기억했다가 다시 켜기로 그대로 돌림
     const paused = settings().paused;
     const pauseRow = paused?.length
         ? `<div class="etk-sum-pause etk-sum-paused"><div class="menu_button etk-pause-btn"><i class="fa-solid fa-play"></i>다시 켜기</div><span>breeze 기능 ${paused.length}개를 잠시 꺼 뒀어요.</span></div>`
-        : `<div class="etk-sum-pause"><div class="menu_button etk-pause-btn"><i class="fa-solid fa-pause"></i>전부 잠시 끄기</div><span>문제가 breeze 때문인지 볼 때 써요.</span></div>`;
+        : `<div class="etk-sum-pause">${onCount(ALL) < FEATURES.length ? '<div class="menu_button etk-all-on"><i class="fa-solid fa-check-double"></i>모두 켜기</div>' : ''}<div class="menu_button etk-pause-btn"><i class="fa-solid fa-pause"></i>전부 잠시 끄기</div><span>문제가 breeze 때문인지 볼 때 써요.</span></div>`;
     // 설정 내보내기 · 불러오기는 자주 쓰지 않아 잠시 끄기 줄 오른쪽 구석에 작게
     const io = '<div class="etk-sum-io"><i class="fa-solid fa-file-export etk-all-export interactable" tabindex="0" title="설정 내보내기(켜 둔 기능 · 기능마다 고른 설정 전부)"></i><i class="fa-solid fa-file-import etk-all-import interactable" tabindex="0" title="설정 불러오기"></i></div>';
     body.innerHTML = `${pauseRow.replace(/<\/div>$/, `${io}</div>`)}<div class="etk-summary">${GROUPS.map(box).join('')}<div class="etk-sum-box"><div class="etk-sum-head" data-tab="${esc(SERVER_TAB)}" tabindex="0"><span>${esc(SERVER_TAB)}</span><small class="etk-server-count">${esc(serverCount)}</small></div><div class="etk-sum-note">${esc(srv)}</div></div></div>`;
     if (keep !== null) body.scrollTop = keep;
     body.querySelector('.etk-pause-btn').addEventListener('click', togglePause);
+    body.querySelector('.etk-all-on')?.addEventListener('click', async () => {
+        for (const f of FEATURES) if (!settings().enabled[f.id]) await setEnabled(f.id, true);
+        renderDialog();
+    });
     body.querySelector('.etk-all-export').addEventListener('click', exportAll);
     body.querySelector('.etk-all-import').addEventListener('click', importAll);
     const summary = body.querySelector('.etk-summary');
@@ -389,6 +394,15 @@ function renderSummary(body) {
         dialog()?.querySelector(`.etk-card[data-id="${f.id}"]`)?.scrollIntoView({ block: 'start' });
         return true;
     };
+    // 묶음 제목 줄의 '모두 켜기 · 끄기': 처음 설치하면 전부 꺼져 있어서 하나씩 누르지 않게
+    summary.addEventListener('click', async (e) => {
+        const all = e.target.closest('.etk-sum-all');
+        if (!all) return;
+        e.stopImmediatePropagation();
+        const on = all.dataset.on === '1';
+        for (const f of FEATURES.filter(x => x.group === all.dataset.group)) if (!!settings().enabled[f.id] !== on) await setEnabled(f.id, on);
+        renderDialog();
+    });
     summary.addEventListener('click', (e) => { if (e.target.closest('.etk-sum-name')) e.preventDefault(); go(e.target); });   // 이름을 눌러도 체크칸이 바뀌지 않게
     summary.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && go(e.target)) e.preventDefault(); });
 }
