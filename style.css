@@ -87,43 +87,6 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 /* 글꼴 확장이 모든 span 에 ‘보통 굵기’를 !important 로 거는 경우가 있어 id 로 이김 */
 .etk-launcher .etk-launch-count, #etk_settings .etk-launch-count { margin-left: .1em; padding: .12em .6em; border-radius: 999px; background: color-mix(in srgb, currentColor 9%, transparent); font-weight: 700 !important; font-style: normal !important; font-size: .74em; font-variant-numeric: tabular-nums; opacity: .7; align-self: center; }
 
-/* 화면 가득: inset 대신 크기를 직접 — html 에 transform 이 걸린 화면(휴대폰 등)에서는 inset:0 이 html 높이(0)를 따라가 창이 납작해지고 위로 밀려났음 */
-#etk_dialog { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; z-index: 10100; display: flex; align-items: center; justify-content: center; background: rgb(0 0 0 / .5); }
-#etk_dialog .etk-window { --etk-line: color-mix(in srgb, var(--SmartThemeBodyColor) 12%, transparent); --etk-soft: color-mix(in srgb, var(--SmartThemeBodyColor) 6%, transparent); --etk-accent: var(--SmartThemeQuoteColor, #7a9cc6);
-    width: min(940px, 96vw); height: min(720px, 90dvh); display: flex; flex-direction: column; overflow: hidden; border-radius: 14px;
-    /* 테마의 바탕색이 반투명이면 뒤의 채팅 글이 비쳐 겹쳐 보이므로 뒤를 흐리게 */
-    -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px);
-    background: var(--SmartThemeBlurTintColor); color: var(--SmartThemeBodyColor); border: 1px solid var(--etk-line); box-shadow: 0 18px 50px rgb(0 0 0 / .4); }
-/* 흐림이 안 먹는 화면(휴대폰 · 흐림 0 설정)에서는 반투명 바탕 뒤로 홈 화면이 그대로 비쳐 겹쳐 보였음 → 같은 색을 불투명하게 */
-@supports (color: rgb(from red r g b)) { #etk_dialog .etk-window { background: rgb(from var(--SmartThemeBlurTintColor) r g b / 1); } }
-/* 휴대폰: 창을 화면 가득, 왼쪽 묶음 목록은 위쪽 가로 줄(밀어서 넘김)로 */
-@media (max-width: 700px) {
-    #etk_dialog .etk-window { width: 100vw; height: 100dvh; border-radius: 0; border: 0; }
-    #etk_dialog .etk-top { padding: 10px 12px; gap: 10px; }
-    #etk_dialog .etk-layout { flex-direction: column; }
-    #etk_dialog .etk-nav { width: auto; flex-direction: row; overflow-x: auto; overflow-y: hidden; padding: 8px 10px; border-right: 0; border-bottom: 1px solid var(--etk-line); scrollbar-width: none; }
-    #etk_dialog .etk-nav::-webkit-scrollbar { display: none; }
-    #etk_dialog .etk-nav-item { flex: none; white-space: nowrap; }
-    #etk_dialog .etk-nav-gap { display: none; }
-    #etk_dialog .etk-main { padding: 10px 12px 24px; }
-    /* 카드 머리 줄을 한 줄로: 줄바꿈되면 별 · 설정 버튼이 아래 줄로 밀려 카드마다 빈 칸이 크게 생겼음 */
-    #etk_dialog .etk-card-head { flex-wrap: nowrap !important; gap: 10px; }
-    #etk_dialog .etk-card-tools { flex: none !important; width: auto !important; }
-}
-#etk_dialog .etk-top { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-bottom: 1px solid var(--etk-line); }
-#etk_dialog .etk-search { flex: 1; display: flex; align-items: center; gap: 8px; max-width: 360px; margin-left: auto; padding: 0 10px; border-radius: 999px; background: var(--etk-soft); }
-#etk_dialog .etk-search i { opacity: .5; font-size: .85em; }
-#etk_dialog .etk-search input { flex: 1; min-width: 0; height: 32px; margin: 0; padding: 0; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }
-#etk_dialog .etk-close { padding: 6px 8px; border-radius: 8px; cursor: pointer; opacity: .6; }
-#etk_dialog .etk-close:hover { opacity: 1; background: var(--etk-soft); }
-#etk_dialog .etk-layout { flex: 1; min-height: 0; display: flex; }
-#etk_dialog .etk-nav { flex: none; width: 190px; padding: 10px; overflow-y: auto; border-right: 1px solid var(--etk-line); display: flex; flex-direction: column; gap: 2px; }
-#etk_dialog .etk-nav-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; user-select: none; }
-#etk_dialog .etk-nav-item small { opacity: .5; font-size: .8em; }
-#etk_dialog .etk-nav-item:hover { background: var(--etk-soft); }
-#etk_dialog .etk-nav-item.etk-active { background: color-mix(in srgb, var(--etk-accent) 18%, transparent); font-weight: 600; }
-#etk_dialog .etk-nav-gap { flex: 1; min-height: 8px; }
-#etk_dialog .etk-main { flex: 1; min-width: 0; overflow-y: auto; padding: 12px 16px 20px; }
 #etk_dialog .etk-section { margin: 14px 2px 6px; font-size: .8em; font-weight: 700; letter-spacing: .04em; opacity: .55; }
 #etk_dialog .etk-section:first-child, #etk_dialog .etk-section.etk-first { margin-top: 2px; }
 #etk_dialog .etk-card[hidden], #etk_dialog .etk-section[hidden] { display: none !important; }
@@ -158,17 +121,6 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 #etk_dialog .etk-warn { color: #c98a1b; }
 #etk_dialog .etk-steps { margin: 4px 0 0; padding-left: 22px; line-height: 1.9; }
 #etk_dialog code { padding: 1px 5px; border-radius: 4px; background: var(--etk-soft); font-size: .88em; }
-/* 좁은 화면: 묶음을 위쪽 가로 줄로 */
-@media (max-width: 700px) {
-    #etk_dialog .etk-window { width: 100vw; height: 100dvh; border-radius: 0; }
-    #etk_dialog .etk-layout { flex-direction: column; }
-    #etk_dialog .etk-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--etk-line); padding: 8px; }
-    #etk_dialog .etk-nav-item { flex: none; padding: 6px 10px; }
-    #etk_dialog .etk-nav-gap { display: none; }
-    #etk_dialog .etk-options { margin-left: 0; }
-    #etk_dialog .etk-card-head { flex-wrap: wrap; }
-    #etk_dialog .etk-card-tools { width: 100%; justify-content: flex-end; }
-}
 :is(#etk_dialog, .etk-launcher) .etk-signals .etk-flex { margin: 0; } :is(#etk_dialog, .etk-launcher) .etk-signals .checkbox_label { flex: 1; margin: 0; }
 
 .etk-launcher .etk-quick-row { display: flex; align-items: center; gap: 8px; }
@@ -351,33 +303,12 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 .etk-options.etk-options-off { opacity: .45; pointer-events: none; filter: grayscale(.4); transition: opacity .2s; }
 #etk_dialog .etk-options[hidden] { display: none !important; }
 
-/* 전체 탭 요약판 */
-#etk_dialog .etk-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
-@media (max-width: 700px) { #etk_dialog .etk-summary { grid-template-columns: minmax(0, 1fr); } }
-#etk_dialog .etk-sum-box { border: 1px solid color-mix(in srgb, var(--SmartThemeBorderColor, currentColor) 60%, transparent); border-radius: 10px; padding: 8px 12px 10px; }
-#etk_dialog .etk-sum-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-weight: 600; padding: 2px 0 6px; cursor: pointer; }
-#etk_dialog .etk-sum-head small { font-weight: 400; opacity: .65; }
-#etk_dialog .etk-sum-item { display: flex; align-items: center; gap: 8px; min-height: 28px; margin: 0; font-size: .92em; }
-#etk_dialog .etk-sum-item input { flex: none; margin: 0; }
-#etk_dialog .etk-sum-name { cursor: pointer; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#etk_dialog .etk-sum-name:hover { text-decoration: underline; text-underline-offset: 3px; }
-#etk_dialog .etk-sum-off .etk-sum-name { opacity: .5; }
-#etk_dialog .etk-sum-note { font-size: .9em; opacity: .75; }
-
 /* 쉬는 중 · 오류 표시 */
 #etk_dialog .etk-card-state { margin-top: 4px; font-size: .82em; opacity: .85; }
 #etk_dialog .etk-card-state::before { content: '\f04c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-right: 6px; font-size: .9em; }
 #etk_dialog .etk-card-state.etk-state-error::before { content: '\f071'; }
-#etk_dialog .etk-sum-rest .etk-sum-name::after { content: '\f04c'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-left: 6px; font-size: .75em; opacity: .6; }
-#etk_dialog .etk-sum-pause { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: .9em; }
-#etk_dialog .etk-sum-pause > span { opacity: .75; min-width: 0; flex: 1; }
-#etk_dialog .etk-sum-paused > span { opacity: 1; font-weight: 600; }
-#etk_dialog .etk-sum-pause .menu_button { flex: none; margin: 0; }
 #etk_dialog .etk-splash-look[hidden] { display: none; }
 #etk_dialog .etk-splash-io { margin: 6px 0 8px; gap: 8px; }
-#etk_dialog .etk-sum-io { margin-left: auto; display: flex; gap: 12px; }
-#etk_dialog .etk-sum-io > i { cursor: pointer; opacity: .5; font-size: .95em; padding: 4px; }
-#etk_dialog .etk-sum-io > i:hover { opacity: 1; }
 #etk_dialog .etk-sub-io { display: flex; align-items: center; }
 #etk_dialog .etk-server-toggle { cursor: pointer; }
 #etk_dialog .etk-server-pending { opacity: .9; font-weight: 600; }
@@ -397,17 +328,6 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 :is(#etk_dialog, .etk-launcher) .etk-known-list { max-height: 300px; overflow-y: auto; padding-right: 4px; }
 :is(#etk_dialog, .etk-launcher) .etk-pin-list { max-height: 360px; overflow-y: auto; padding-right: 4px; }
 .etk-sel-menu { max-height: min(60vh, 420px); overflow-y: auto; }
-
-/* 휴대폰: 세부 설정을 화면을 덮는 한 장으로(기능 목록 사이에 긴 칸이 끼면 위아래로 한참 오가야 했음). 맨 위 줄 = 뒤로 가기 */
-@media (max-width: 700px) {
-    #etk_dialog .etk-card > .etk-options:not([hidden]) { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh !important; max-height: none !important; box-sizing: border-box; z-index: 30; margin: 0; border-radius: 0; overflow-y: auto; padding: 60px 14px 28px; background: var(--SmartThemeBlurTintColor); animation: none !important; }
-    #etk_dialog .etk-card > .etk-options:not([hidden])::before { content: '\f060'; font-family: 'Font Awesome 6 Free'; font-weight: 900; position: fixed; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; padding: 0 16px; background: var(--SmartThemeBlurTintColor); border-bottom: 1px solid var(--etk-line); z-index: 2; cursor: pointer; }
-    #etk_dialog .etk-card > .etk-options:not([hidden])::after { content: attr(data-title); position: fixed; top: 0; left: 46px; height: 48px; display: flex; align-items: center; font-weight: 600; z-index: 3; pointer-events: none; }
-}
-@supports (color: rgb(from red r g b)) { @media (max-width: 700px) {
-    #etk_dialog .etk-card > .etk-options:not([hidden]), #etk_dialog .etk-card > .etk-options:not([hidden])::before { background: rgb(from var(--SmartThemeBlurTintColor) r g b / 1); }
-} }
-@media (max-width: 700px) { #etk_dialog .etk-card > .etk-options :is(.etk-pin-list, .etk-known-list, .etk-toast-recent, .etk-toast-hidden) { max-height: none; overflow: visible; } }
 
 #etk_dialog .etk-install { border: 1px solid var(--etk-line); border-radius: 8px; margin: 8px 0; overflow: hidden; }
 #etk_dialog .etk-install-os { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--etk-line); font-size: .85em; }
@@ -443,10 +363,10 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 #etk_dialog .etk-install-foot .menu_button { margin: 0; padding: 4px 12px; font-size: .85em; display: inline-flex; align-items: center; gap: 6px; }
 #etk_settings .etk-brand-name.etk-weight-fill { -webkit-text-stroke: .045em currentColor !important; }   /* 글꼴에 500 이 없을 때 400 위에 얇은 테두리로 중간 굵기 */
 .etk-settings .etk-theme-rows { max-height: 12em; overflow-y: auto; }   /* 고른 테마가 많아도 설정 칸이 끝없이 길어지지 않게 */
-#etk_dialog .etk-sum-head .etk-sum-all { margin-left: auto; font-size: .8em; font-weight: 400; opacity: .6; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--SmartThemeBorderColor, currentColor); white-space: nowrap; }
-#etk_dialog .etk-sum-head .etk-sum-all:hover { opacity: 1; }
 .etk-launcher .etk-launch-count, #etk_settings .etk-launch-count { cursor: pointer; }
-.etk-changelog { text-align: left; display: flex; flex-direction: column; height: min(72vh, 620px); }
+/* 업데이트 내역 창: 화면을 크게 가리지 않게 작게(사용자 2026-11-17). 창 폭은 실리태번 팝업 기본(500px)보다 좁게 */
+.popup:has(.etk-changelog) { width: min(420px, 94vw) !important; min-width: 0 !important; }
+.etk-changelog { text-align: left; display: flex; flex-direction: column; height: min(54vh, 420px); }
 .etk-changelog h3 { margin: 0 0 10px; flex: none; }
 .etk-changelog .etk-cl-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .etk-changelog .etk-cl-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
@@ -470,3 +390,323 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 .etk-settings .etk-tone-chip { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 10px; font-size: .9em; }
 .etk-settings .etk-tone-chip i { font-size: .8em; }
 .etk-settings .etk-sound-list { padding-bottom: 4px; }
+
+/* 테마 맞추기 */
+.etk-settings .etk-tf-open { width: fit-content; margin: 6px 0; }
+.etk-settings .etk-tf-saved small { flex: 1; }
+html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
+.etk-tf-box { --tf-accent: var(--SmartThemeQuoteColor, #6b8afd); position: fixed; left: 0; top: 0; z-index: 100000; pointer-events: none; opacity: 0; border-radius: 8px; outline: 2px solid color-mix(in srgb, var(--tf-accent) 85%, transparent); outline-offset: 3px; background: color-mix(in srgb, var(--tf-accent) 7%, transparent); box-shadow: 0 0 0 7px color-mix(in srgb, var(--tf-accent) 10%, transparent); transition: transform .14s ease, width .14s ease, height .14s ease, opacity .18s ease, outline-color .18s ease; will-change: transform; }
+.etk-tf-box.etk-show { opacity: 1; }
+.etk-tf-box.etk-hover { outline-width: 1.5px; outline-color: color-mix(in srgb, var(--tf-accent) 55%, transparent); background: color-mix(in srgb, var(--tf-accent) 5%, transparent); box-shadow: none; }
+.etk-tf-box::after { content: attr(data-name); position: absolute; left: -3px; bottom: calc(100% + 7px); padding: 2px 9px; border-radius: 999px; background: var(--tf-accent); color: #fff; font: 600 11.5px/1.5 "Noto Sans", sans-serif; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.etk-tf-bar, .etk-tf-card, .etk-tf-list, .etk-tf-zap { position: fixed; z-index: 100002; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)); box-shadow: 0 8px 28px rgba(0,0,0,.28); font-family: "Noto Sans", sans-serif; font-size: 13px; line-height: 1.4; backdrop-filter: blur(8px); }
+.etk-tf-bar *, .etk-tf-card *, .etk-tf-list * { box-sizing: border-box; }
+/* 맨 위에 두면 실리태번 위쪽 아이콘 줄을 가려서 패널을 못 열었음 → 입력창 바로 위 */
+.etk-tf-bar { bottom: calc(var(--bottomFormBlockSize, 50px) + 14px); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 12px; border-radius: 999px; max-width: calc(100vw - 16px); }
+.etk-tf-title { cursor: move; touch-action: none; user-select: none; display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .85; }
+.etk-tf-title b { overflow: hidden; text-overflow: ellipsis; }
+.etk-tf-bar .menu_button, .etk-tf-card .menu_button { margin: 0 !important; padding: 4px 10px !important; min-height: 0; font-size: 12.5px; white-space: nowrap; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+.etk-tf-bar .menu_button.etk-on { background: var(--SmartThemeQuoteColor, #6b8afd) !important; color: #fff !important; border-color: transparent !important; }
+.etk-tf-bar .menu_button.disabled, .etk-tf-card .menu_button.disabled { opacity: .35; pointer-events: none; }
+.etk-tf-card { width: min(340px, calc(100vw - 16px)); height: min(620px, calc(100vh - 90px)); max-height: min(620px, calc(100vh - 90px)); overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 12px; border-radius: 14px; display: flex; flex-direction: column; gap: 9px; }
+.etk-tf-card-head { display: flex; align-items: center; gap: 6px; }
+.etk-tf-card-head .menu_button { padding: 4px 8px !important; }
+.etk-tf-what { cursor: move; touch-action: none; user-select: none; flex: 1; min-width: 0; font-size: 12px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etk-tf-x { padding: 2px 4px; opacity: .6; }
+.etk-tf-ctl-head { display: flex; justify-content: space-between; margin-bottom: 2px; }
+.etk-tf-ctl-head b { font-variant-numeric: tabular-nums; }
+.etk-tf-ctl-row { display: flex; align-items: center; gap: 8px; }
+.etk-tf-ctl-row input[type="range"] { flex: 1; min-width: 0; margin: 0; }
+.etk-tf-card .etk-tf-scope { margin-top: 4px !important; font-size: 11.5px !important; opacity: .8; width: fit-content; }
+.etk-tf-check { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; cursor: pointer; }
+.etk-tf-check small { opacity: .6; font-size: 11.5px; }
+.etk-tf-acts { display: flex; gap: 6px; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); padding-top: 10px; }
+.etk-tf-list { bottom: calc(var(--bottomFormBlockSize, 50px) + 60px); left: 50%; transform: translateX(-50%); width: min(380px, calc(100vw - 16px)); height: min(60vh, 520px); max-height: min(60vh, 520px); overflow-y: auto; padding: 10px; border-radius: 14px; }
+.etk-tf-list { display: flex; flex-direction: column; overflow: hidden !important; padding: 0 !important; }
+.etk-tf-list-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 6px; }
+.etk-tf-list-head b { flex: 1; font-weight: 600; }
+.etk-tf-list-x { opacity: .6; padding: 4px; }
+.etk-tf-list-tools { display: flex; gap: 6px; padding: 0 12px 8px; border-bottom: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); }
+.etk-tf-list-tools .text_pole { margin: 0 !important; min-height: 0; height: 30px; padding: 2px 8px; font-size: 12.5px; }
+.etk-tf-list-file { display: flex; gap: 6px; justify-content: flex-end; padding: 8px 12px; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); }
+.etk-tf-list-file .menu_button { margin: 0 !important; padding: 4px 10px !important; min-height: 0; font-size: 12.5px; white-space: nowrap; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+.etk-tf-list-find { flex: 1; min-width: 0; }
+.etk-tf-list-sort { flex: 0 0 auto; width: auto !important; padding-right: 24px !important; }
+.etk-tf-list-body { overflow-y: auto; overscroll-behavior: contain; padding: 4px 6px 8px; min-height: 0; }
+.etk-tf-list-group { display: flex; align-items: center; gap: 7px; padding: 7px 6px 5px; font-weight: 600; font-size: 12.5px; opacity: .85; position: sticky; top: -4px; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); z-index: 1; }
+.etk-tf-list-group i { font-size: 10px; transition: transform .15s ease; }
+.etk-tf-list-group.etk-open i { transform: rotate(90deg); }
+.etk-tf-list-group small { opacity: .6; font-weight: 400; }
+.etk-tf-list-row { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 23px; border-radius: 8px; }
+.etk-tf-list-row.interactable:hover { background: color-mix(in srgb, var(--SmartThemeQuoteColor, #6b8afd) 10%, transparent); }
+.etk-tf-list-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.etk-tf-list-txt b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etk-tf-list-txt small { opacity: .65; font-size: 11.5px; overflow-wrap: anywhere; }
+.etk-tf-list-row.etk-off .etk-tf-list-txt { opacity: .5; }
+.etk-tf-list-off, .etk-tf-list-del { opacity: .55; padding: 4px; }
+.etk-tf-list-off:hover, .etk-tf-list-del:hover { opacity: 1; }
+.etk-tf-empty { opacity: .65; }
+.etk-tf-sec { font-size: 11.5px; font-weight: 600; letter-spacing: .04em; opacity: .55; margin-top: 2px; }
+.etk-tf-props { display: flex; flex-direction: column; gap: 4px; }
+.etk-tf-prop { display: grid; grid-template-columns: 5.6em 1fr 5.4em 16px; align-items: center; gap: 8px; }
+.etk-tf-prop input[type="range"] { width: 100%; margin: 0; }
+.etk-tf-prop b { text-align: right; font-weight: 500; font-variant-numeric: tabular-nums; opacity: .6; font-size: 12px; }
+.etk-tf-prop b.etk-set { opacity: 1; font-weight: 700; }
+.etk-tf-undo1 { font-size: 11px; opacity: .55; }
+.etk-tf-undo1.etk-off { visibility: hidden; }
+.etk-tf-path { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; font-size: 11.5px; margin-top: -2px; }
+.etk-tf-chip { padding: 1px 8px; border-radius: 999px; border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35)); opacity: .75; white-space: nowrap; max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
+.etk-tf-chip:hover { opacity: 1; }
+.etk-tf-chip.etk-on { opacity: 1; font-weight: 600; border-color: var(--SmartThemeQuoteColor, #6b8afd); color: var(--SmartThemeQuoteColor, #6b8afd); cursor: default; }
+.etk-tf-sep { opacity: .4; }
+.etk-tf-same { margin-left: 6px; padding: 0 7px; border-radius: 999px; font-weight: 500; letter-spacing: 0; background: color-mix(in srgb, var(--SmartThemeQuoteColor, #6b8afd) 14%, transparent); opacity: 1; }
+.etk-tf-more > summary { cursor: pointer; font-size: 12px; opacity: .65; list-style: none; padding: 2px 0; }
+.etk-tf-more > summary::-webkit-details-marker { display: none; }
+.etk-tf-more > summary::before { content: "+ "; }
+.etk-tf-more[open] > summary::before { content: "− "; }
+.etk-tf-more > .etk-tf-props { margin-top: 4px; }
+.etk-tf-numbox { display: flex; align-items: baseline; justify-content: flex-end; gap: 2px; opacity: .6; cursor: text; }
+.etk-tf-numbox.etk-set { opacity: 1; }
+.etk-tf-numbox small { font-size: 11px; opacity: .7; }
+.etk-tf-card input.etk-tf-num { width: 3.6em !important; min-width: 0 !important; height: auto !important; padding: 1px 3px !important; margin: 0 !important; border: 1px solid transparent !important; border-radius: 6px !important; background: transparent !important; box-shadow: none !important; color: inherit !important; font: inherit; font-size: 12px !important; font-variant-numeric: tabular-nums; text-align: right; -moz-appearance: textfield; }
+.etk-tf-card input.etk-tf-num::-webkit-inner-spin-button, .etk-tf-card input.etk-tf-num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.etk-tf-numbox:hover input.etk-tf-num, .etk-tf-card input.etk-tf-num:focus { border-color: var(--SmartThemeBorderColor, rgba(127,127,127,.4)) !important; outline: none; }
+.etk-tf-numbox.etk-set input.etk-tf-num { font-weight: 700; }
+.etk-tf-warn { padding: 6px 8px; border-radius: 8px; background: color-mix(in srgb, #e8a33d 14%, transparent); }
+.etk-tf-warn small { opacity: .8; }
+/* 휴대폰은 입력창이 막대 자리와 겹쳐 입력창을 고를 수 없었음 → 위쪽 아이콘 줄 바로 아래 */
+@media (max-width: 700px) {
+    .etk-tf-bar { bottom: auto; top: calc(var(--topBarBlockSize, 50px) + 8px); }
+    .etk-tf-list { bottom: auto; top: calc(var(--topBarBlockSize, 50px) + 58px); }
+}
+.etk-tf-stack { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 4px; font-size: 11.5px; }
+.etk-tf-stack-label { opacity: .55; margin-right: 2px; }
+/* 선택 상자 손잡이: 고른 칸에서만(고르는 중엔 숨김) */
+.etk-tf-h { display: none; position: absolute; pointer-events: auto; z-index: 1; touch-action: none; }
+.etk-tf-box.etk-edit .etk-tf-h { display: block; }
+.etk-tf-hmove { left: 50%; top: -14px; width: 28px; height: 28px; margin-left: -14px; border-radius: 50%; background: var(--tf-accent); color: #fff; display: none; place-items: center; font-size: 12px; cursor: move; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+.etk-tf-box.etk-edit .etk-tf-hmove { display: grid; }
+.etk-tf-hw { right: -8px; top: 50%; width: 10px; height: 34px; margin-top: -17px; border-radius: 6px; background: var(--tf-accent); cursor: ew-resize; box-shadow: 0 1px 5px rgba(0,0,0,.25); }
+.etk-tf-hh { bottom: -8px; left: 50%; width: 34px; height: 10px; margin-left: -17px; border-radius: 6px; background: var(--tf-accent); cursor: ns-resize; box-shadow: 0 1px 5px rgba(0,0,0,.25); }
+.etk-tf-box.etk-edit::after { left: 50%; transform: translateX(-50%); bottom: calc(100% + 18px); }
+.etk-tf-box.etk-tag-in::after { bottom: auto; top: 6px; }
+.etk-tf-box.etk-edit.etk-tag-in::after { bottom: auto; top: 30px; }
+.etk-tf-acts { flex-wrap: wrap; }
+.etk-tf-themes { position: fixed; z-index: 100003; width: min(300px, calc(100vw - 16px)); height: min(60vh, 420px); max-height: min(60vh, 420px); display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)); box-shadow: 0 8px 28px rgba(0,0,0,.3); font: 13px/1.4 "Noto Sans", sans-serif; }
+.etk-tf-themes-head { font-weight: 600; }
+.etk-tf-themes-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.etk-tf-themes-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
+.etk-tf-themes-row[hidden] { display: none; }
+.etk-tf-themes-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etk-tf-themes-foot { display: flex; gap: 6px; justify-content: flex-end; }
+.etk-tf-themes-foot .menu_button { margin: 0 !important; padding: 4px 12px !important; border-radius: 999px; font-size: 12.5px; }
+.etk-tf-alike { display: flex; gap: 4px; font-size: 11.5px; }
+.etk-tf-alike .etk-tf-chip.etk-on { cursor: pointer; }
+.etk-tf-pad { position: absolute; inset: 0; border-style: solid; border-color: color-mix(in srgb, var(--tf-accent) 26%, transparent); border-width: var(--tf-pad, 0); border-radius: inherit; pointer-events: none; }
+.etk-tf-mar { position: absolute; top: var(--tf-mar-t, 0); right: var(--tf-mar-r, 0); bottom: var(--tf-mar-b, 0); left: var(--tf-mar-l, 0); border-style: solid; border-color: color-mix(in srgb, var(--tf-accent) 26%, transparent); border-width: var(--tf-mar, 0); pointer-events: none; }
+.etk-tf-box.etk-hover .etk-tf-pad, .etk-tf-box.etk-hover .etk-tf-mar { opacity: .7; }
+.etk-tf-hint { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--SmartThemeQuoteColor, #6b8afd) 10%, transparent); font-size: 12px; line-height: 1.5; }
+.etk-tf-hint .menu_button { width: fit-content; }
+.etk-tf-orderrow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.etk-tf-orderrow > span { opacity: .65; margin-right: auto; }
+.etk-tf-colors { display: flex; flex-direction: column; gap: 4px; }
+.etk-tf-color { display: grid; grid-template-columns: 5.6em auto 1fr 16px; align-items: center; gap: 8px; }
+.etk-tf-color input[type="color"] { width: 34px !important; height: 22px !important; padding: 0 !important; margin: 0 !important; border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)) !important; border-radius: 6px !important; background: none !important; cursor: pointer; }
+.etk-tf-color .etk-tf-cnone { justify-self: start; padding: 2px 9px !important; font-size: 11.5px !important; }
+.etk-tf-color .etk-tf-cnone.etk-on { background: var(--SmartThemeQuoteColor, #6b8afd) !important; color: #fff !important; border-color: transparent !important; }
+.etk-tf-color .etk-tf-undo1 { grid-column: 4; }
+.etk-tf-auto { margin-left: 5px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35)); opacity: .7; vertical-align: 1px; }
+.etk-tf-auto.etk-on { opacity: 1; background: var(--SmartThemeQuoteColor, #6b8afd); color: #fff; border-color: transparent; }
+.etk-tf-prop > span { white-space: nowrap; }
+.etk-tf-prop { grid-template-columns: 7.2em 1fr 5em 16px !important; }
+/* 테마 맞추기: 조절 칸(묶음 다섯 · 상자 그림) */
+.etk-tf-card .etk-tf-sec { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.25)); opacity: 1; font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+.etk-tf-card .etk-tf-sec small { font-weight: 400; opacity: .55; font-size: 11px; }
+.etk-tf-card .etk-tf-same { font-size: 11.5px; opacity: .7; }
+.etk-tf-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.etk-tf-row > span:first-child { min-width: 6.5em; opacity: .8; }
+.etk-tf-noroom { flex: 1 1 8em; opacity: .7; font-size: 11.5px; }
+.etk-tf-n { display: inline-flex; align-items: center; gap: 2px; position: relative; padding: 0 2px; border-radius: 6px; cursor: text; }
+.etk-tf-card .etk-tf-n input { width: 3.4em !important; min-width: 0 !important; height: auto !important; margin: 0 !important; padding: 2px 3px !important; border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35)) !important; border-radius: 6px !important; background: transparent !important; box-shadow: none !important; color: inherit !important; font: inherit; font-size: 12px !important; text-align: center; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+.etk-tf-card .etk-tf-n input::-webkit-inner-spin-button, .etk-tf-card .etk-tf-n input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.etk-tf-card .etk-tf-n input:focus { outline: none; border-color: var(--SmartThemeQuoteColor, #6b8afd) !important; }
+.etk-tf-n.etk-set input { font-weight: 700; border-color: var(--SmartThemeQuoteColor, #6b8afd) !important; }
+.etk-tf-n small { font-size: 10.5px; opacity: .6; }
+.etk-tf-nx { font-style: normal; font-size: 11px; opacity: .55; cursor: pointer; padding: 0 2px; }
+.etk-tf-nx:hover { opacity: 1; }
+.etk-tf-bm { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: ". top ." "left mid right" ". bottom ."; align-items: center; justify-items: center; gap: 2px; padding: 14px 6px 6px; border-radius: 10px; position: relative; background: rgba(240, 150, 60, .10); border: 1px dashed rgba(240, 150, 60, .5); }
+.etk-tf-bm > .etk-tf-bm-top { grid-area: top; } .etk-tf-bm > .etk-tf-bm-left { grid-area: left; } .etk-tf-bm > .etk-tf-bm-right { grid-area: right; } .etk-tf-bm > .etk-tf-bm-bottom { grid-area: bottom; }
+.etk-tf-bm-pad { grid-area: mid; width: 100%; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: ". top ." "left mid right" ". bottom ."; align-items: center; justify-items: center; gap: 2px; padding: 14px 4px 4px; border-radius: 8px; position: relative; background: rgba(76, 175, 120, .12); border: 1px dashed rgba(76, 175, 120, .55); }
+.etk-tf-bm-pad > .etk-tf-bm-top { grid-area: top; } .etk-tf-bm-pad > .etk-tf-bm-left { grid-area: left; } .etk-tf-bm-pad > .etk-tf-bm-right { grid-area: right; } .etk-tf-bm-pad > .etk-tf-bm-bottom { grid-area: bottom; }
+.etk-tf-bm-core { grid-area: mid; display: flex; align-items: center; gap: 3px; flex-wrap: wrap; justify-content: center; padding: 6px; border-radius: 6px; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35)); }
+.etk-tf-bm-t { position: absolute; top: 2px; left: 7px; font-size: 10px; opacity: .6; }
+.etk-tf-x2 { opacity: .5; font-size: 11px; }
+.etk-tf-card .etk-tf-auto { margin: 0; }
+.etk-tf-seg { display: inline-flex; border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35)); border-radius: 999px; overflow: hidden; }
+.etk-tf-seg > span { padding: 3px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.etk-tf-seg > span + span { border-left: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.35)); }
+.etk-tf-seg > span.etk-on { background: var(--SmartThemeQuoteColor, #6b8afd); color: #fff; }
+.etk-tf-seg > span:hover:not(.etk-on) { background: color-mix(in srgb, var(--SmartThemeQuoteColor, #6b8afd) 12%, transparent); }
+.etk-tf-card .etk-tf-color { grid-template-columns: 6.5em auto auto 1fr 16px; font-size: 12.5px; }
+.etk-tf-card .etk-tf-color > i { display: none; }
+.etk-tf-card .etk-tf-acts { flex-wrap: wrap; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.25)); margin-top: 6px; }
+.etk-tf-more .etk-tf-row { margin-top: 6px; }
+/* 화면의 여백 띠(끌어서 그 방향 여백 바꾸기) */
+.etk-tf-band { position: absolute; display: none; pointer-events: auto; touch-action: none; z-index: 1; }
+.etk-tf-box.etk-edit .etk-tf-band { display: block; }
+.etk-tf-band-p { cursor: ns-resize; } .etk-tf-band-m { cursor: ns-resize; }
+.etk-tf-band[data-k$="l"], .etk-tf-band[data-k$="r"] { cursor: ew-resize; }
+.etk-tf-band:hover { background: color-mix(in srgb, var(--tf-accent) 35%, transparent); }
+.etk-tf-box .etk-tf-h { z-index: 2; }
+.etk-tf-bar .etk-tf-peekbtn.etk-on { background: var(--SmartThemeQuoteColor, #6b8afd) !important; color: #fff !important; }
+/* 손가락 기기: 손잡이 크게 */
+@media (pointer: coarse) {
+    .etk-tf-hmove { width: 38px; height: 38px; margin-left: -19px; top: -20px; font-size: 15px; }
+    .etk-tf-hw { width: 16px; height: 46px; margin-top: -23px; right: -10px; }
+    .etk-tf-hh { width: 46px; height: 16px; margin-left: -23px; bottom: -10px; }
+    .etk-tf-card .etk-tf-n input { width: 3.8em !important; padding: 5px 3px !important; font-size: 14px !important; }
+    .etk-tf-seg > span { padding: 6px 12px; }
+}
+/* 좁은 화면: 조절 칸은 화면 아래에서 올라오는 판 */
+@media (max-width: 700px) {
+    .etk-tf-card { left: 0 !important; right: 0 !important; top: calc(100dvh - 48vh) !important; bottom: auto !important; width: 100% !important; height: 48vh !important; max-height: 48vh !important; border-radius: 16px 16px 0 0 !important; padding-bottom: calc(12px + env(safe-area-inset-bottom)) !important; }
+    .etk-tf-card .etk-tf-what { cursor: default; }
+}
+
+.etk-tf-guide { position: fixed; left: 0; top: 0; z-index: 100001; pointer-events: none; background: #ff4d8d; }
+.etk-tf-guide-x { width: 1px; height: 100vh; }
+.etk-tf-guide-y { height: 1px; width: 100vw; }
+.etk-tf-hist { display: inline-flex; }
+.etk-tf-hist .menu_button { border-radius: 0 !important; padding: 4px 8px !important; }
+.etk-tf-hist .menu_button:first-child { border-radius: 999px 0 0 999px !important; padding-left: 10px !important; }
+.etk-tf-hist .menu_button:last-child { border-radius: 0 999px 999px 0 !important; padding-right: 10px !important; }
+.etk-tf-hist .menu_button + .menu_button { margin-left: -1px !important; }
+.etk-tf-n input { cursor: ew-resize; touch-action: pan-y; }
+.etk-tf-n input:focus { cursor: text; }
+.etk-tf-minh { opacity: .6; font-size: 11px; margin-left: 4px; white-space: nowrap; }
+.etk-tf-range input[type="range"] { flex: 1; min-width: 80px; margin: 0; accent-color: var(--SmartThemeQuoteColor, #6b8afd); }
+.etk-tf-range b { font-weight: 500; font-size: 12px; min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
+.etk-tf-range.etk-set b { color: var(--SmartThemeQuoteColor, #6b8afd); }
+.etk-tf-space input[type="range"], .etk-tf-dense input[type="range"] { flex: 1; min-width: 80px; margin: 0; accent-color: var(--SmartThemeQuoteColor, #6b8afd); }
+.etk-tf-space b { font-weight: 500; font-size: 12px; min-width: 3.6em; text-align: right; font-variant-numeric: tabular-nums; }
+.etk-tf-dense small { opacity: .6; font-size: 11px; }
+.etk-tf-sides > summary { cursor: pointer; font-size: 12px; opacity: .75; margin: 2px 0 4px; }
+.etk-tf-sides .etk-tf-row { margin-top: 4px; }
+/* 창 높이는 고정: 내용이 바뀔 때 창이 줄었다 늘었다 하지 않게(넘치면 안에서 스크롤) */
+.etk-tf-card > *, .etk-tf-list > *, .etk-tf-themes > * { flex-shrink: 0; }
+.etk-tf-list > .etk-tf-list-body, .etk-tf-themes > .etk-tf-themes-list { flex: 1 1 0; }
+.etk-tf-area-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 6px 10px; }
+.etk-tf-area-row > span:first-child { min-width: 5.5em; font-weight: 500; }
+.etk-tf-area-row > small { flex-basis: 100%; opacity: .65; font-size: 11.5px; }
+.etk-tf-area .etk-tf-sec { padding: 8px 6px 2px; }
+/* 휴대폰 아래 창: 실리태번이 html 에 transform 을 걸어 고정 창의 기준이 높이 0 인 html 이 됨 → bottom: 0 이 화면 맨 위가 돼 창이 화면 밖으로 나갔음. 위에서부터 (화면 높이 − 창 높이)로 놓음 */
+@media (max-width: 700px) {
+    .etk-tf-bar .etk-tf-lbl { display: none; }
+    .etk-tf-area { top: calc(100dvh - 36vh) !important; bottom: auto !important; left: 0 !important; right: 0 !important; transform: none !important; width: 100% !important; height: 36vh !important; max-height: 36vh !important; border-radius: 16px 16px 0 0 !important; }
+}
+.etk-tf-area { height: min(300px, 50vh); max-height: min(300px, 50vh); }
+/* 휴대폰 막대: 버튼이 늘어 끝 버튼이 화면 밖으로 밀렸음 → 간격 · 버튼 여백을 줄임 */
+@media (max-width: 700px) {
+    .etk-tf-bar { gap: 3px; padding: 4px 5px; }
+    .etk-tf-bar .menu_button { padding: 4px 7px !important; }
+    .etk-tf-bar .etk-tf-hist .menu_button { padding: 4px 6px !important; }
+}
+.etk-tf-area-slide input[type="range"], .etk-tf-mg-slide input[type="range"] { flex: 1; min-width: 80px; margin: 0; accent-color: var(--SmartThemeQuoteColor, #6b8afd); }
+.etk-tf-area-slide b, .etk-tf-mg-slide b { font-weight: 500; font-size: 12px; min-width: 4.5em; text-align: right; }
+.etk-tf-area .etk-tf-row, .etk-tf-area .etk-tf-check { padding: 2px 6px; }
+.etk-tf-area .etk-tf-grip { cursor: move; user-select: none; touch-action: none; }
+.etk-tf-av-slide input[type="range"] { flex: 1; min-width: 80px; margin: 0; accent-color: var(--SmartThemeQuoteColor, #6b8afd); }
+.etk-tf-av-slide b { font-weight: 500; font-size: 12px; min-width: 4.5em; text-align: right; }
+.etk-tf-av-msg { display: block; padding: 2px 6px 8px; color: var(--SmartThemeQuoteColor, #c66); font-size: 12px; }
+
+/* 숨기기: 숨길 곳을 고르는 동안 상자를 붉게, 숨긴 뒤 뜨는 작은 알림(고정 크기) */
+.etk-tf-box.etk-tf-zapping { --tf-accent: #e0565b; }
+.etk-tf-zap { width: min(280px, calc(100vw - 16px)); height: 132px; padding: 8px 10px 10px; border-radius: 12px; display: flex; flex-direction: column; gap: 7px; box-sizing: border-box; }
+.etk-tf-zap > * { flex-shrink: 0; }
+.etk-tf-zap-head { display: flex; align-items: center; gap: 6px; min-height: 22px; }
+.etk-tf-zap-head b, .etk-tf-zap-head small { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etk-tf-zap-head small { white-space: normal; font-weight: 400; }
+.etk-tf-zap .etk-tf-seg { align-self: flex-start; }
+.etk-tf-zap-n { opacity: .65; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.etk-tf-zap-acts { display: flex; gap: 6px; }
+.etk-tf-zap .menu_button { margin: 0 !important; padding: 4px 10px !important; min-height: 0; font-size: 12px; white-space: nowrap; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+.etk-tf-zap .menu_button.disabled { opacity: .35; pointer-events: none; }
+.etk-tf-list-scope { opacity: .55; padding: 4px; }
+.etk-tf-list-scope:hover { opacity: 1; }
+/* 하나씩 손보기: 레이아웃 창 맨 아래, 위 조절들과 선으로 나눔 */
+.etk-tf-area-pick { margin-top: 6px; padding-top: 12px !important; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.25)); }
+.etk-tf-area-pick .menu_button { margin: 0 !important; padding: 4px 10px !important; min-height: 0; font-size: 12.5px; white-space: nowrap; border-radius: 999px; display: inline-flex; align-items: center; gap: 5px; }
+/* 휴대폰: 고르기 줄이 창 맨 아래라 끝까지 내려야 보였음 → 창 아래에 붙여 늘 보이게, 설명 글은 뺌 */
+@media (max-width: 700px) {
+    .etk-tf-area-pick { position: sticky; bottom: -8px; z-index: 1; background: var(--tf-bg, var(--SmartThemeBlurTintColor)); padding-bottom: 10px !important; }
+    .etk-tf-area-pick > small { display: none; }
+}
+.etk-tf-bar .etk-tf-pickbtn[hidden] { display: none !important; }
+
+/* ───── 설정 창: 뒤를 가리지 않는 작은 창(PC 는 끌어 옮김, 휴대폰은 아래에서 올라옴 · 손잡이로 높이). 자리 · 크기는 JS 가 px 로 넣음 */
+#etk_dialog { position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 10100; }
+#etk_dialog .etk-window { --etk-line: color-mix(in srgb, var(--SmartThemeBodyColor) 12%, transparent); --etk-soft: color-mix(in srgb, var(--SmartThemeBodyColor) 6%, transparent); --etk-accent: var(--SmartThemeQuoteColor, #7a9cc6);
+    position: fixed; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; border-radius: 14px;
+    background: var(--SmartThemeBlurTintColor); color: var(--SmartThemeBodyColor); border: 1px solid var(--etk-line); box-shadow: 0 14px 40px rgb(0 0 0 / .3); }
+/* 테마 바탕색이 반투명이면 뒤의 채팅 글이 비쳐 겹쳐 보였음 → 같은 색을 불투명하게 */
+@supports (color: rgb(from red r g b)) { #etk_dialog .etk-window { background: rgb(from var(--SmartThemeBlurTintColor) r g b / 1); } }
+#etk_dialog .etk-window.etk-dragging { user-select: none; }
+#etk_dialog .etk-top { position: relative; flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--etk-line); cursor: move; touch-action: none; }
+#etk_dialog .etk-grip { opacity: .3; font-size: .85em; }
+#etk_dialog .etk-handle { display: none; }
+#etk_dialog .etk-search { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 10px; border-radius: 999px; background: var(--etk-soft); cursor: text; }
+#etk_dialog .etk-search i { opacity: .5; font-size: .85em; }
+#etk_dialog .etk-close, #etk_dialog .etk-back { flex: none; padding: 6px 8px; border-radius: 8px; cursor: pointer; opacity: .6; }
+#etk_dialog .etk-close:hover, #etk_dialog .etk-back:hover { opacity: 1; background: var(--etk-soft); }
+#etk_dialog .etk-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+#etk_dialog .etk-top-tools { flex: none; display: flex; align-items: center; gap: 4px; }
+#etk_dialog .etk-top-tools:empty { display: none; }
+#etk_dialog:not(.etk-in-detail) :is(.etk-back, .etk-title) { display: none; }
+#etk_dialog.etk-in-detail :is(.etk-brand, .etk-search) { display: none; }
+#etk_dialog .etk-main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 10px 14px; }
+#etk_dialog .etk-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--etk-line); font-size: .9em; }
+#etk_dialog .etk-foot:empty { display: none; }
+#etk_dialog .etk-foot-gap { flex: 1; }
+#etk_dialog .etk-foot > i, #etk_dialog .etk-foot-server { cursor: pointer; opacity: .6; padding: 4px; white-space: nowrap; }
+#etk_dialog .etk-foot > i:hover, #etk_dialog .etk-foot-server:hover { opacity: 1; }
+#etk_dialog .etk-foot .menu_button { flex: none; }
+/* 목록 */
+#etk_dialog .etk-section { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; padding: 6px 4px; border-radius: 8px; font-size: .8em; font-weight: 700; cursor: pointer; user-select: none; }
+#etk_dialog .etk-section:hover { background: var(--etk-soft); }
+#etk_dialog .etk-fold-icon { font-size: .85em; opacity: .45; width: 1em; transition: transform .15s; }
+#etk_dialog .etk-section.etk-folded .etk-fold-icon { transform: rotate(-90deg); }
+#etk_dialog .etk-section > span:first-child { opacity: .55; }
+#etk_dialog .etk-section small { opacity: .5; font-weight: 400; }
+#etk_dialog .etk-section .etk-sum-all { margin-left: auto; font-weight: 400; opacity: .55; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--SmartThemeBorderColor, currentColor); white-space: nowrap; cursor: pointer; }
+#etk_dialog .etk-section .etk-sum-all:hover { opacity: 1; }
+#etk_dialog .etk-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+#etk_dialog .etk-row:hover { background: var(--etk-soft); }
+#etk_dialog .etk-row-text { flex: 1; min-width: 0; }
+#etk_dialog .etk-row-name { word-break: keep-all; }
+#etk_dialog .etk-row-star { margin-left: 6px; font-size: .7em; opacity: .5; color: var(--etk-accent); }
+/* 창 아래 설명 줄(손가락 기기에서 줄을 누르면): 목록 길이 · 창 크기는 그대로, 설명 줄 높이만 글에 맞춤(최대 네 줄, 넘치면 …).
+   두 줄로 고정하면 짧은 설명 아래가 비어 보였음 */
+#etk_dialog .etk-hint { flex: none; max-height: 5.8em; box-sizing: content-box; padding: 8px 14px; border-top: 1px solid var(--etk-line); font-size: .85em; line-height: 1.45; background: var(--etk-soft); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: keep-all; }
+#etk_dialog .etk-hint[hidden] { display: none; }
+#etk_dialog .etk-hint b { margin-right: 6px; }
+#etk_dialog .etk-hint span { opacity: .75; }
+#etk_dialog .etk-row-picked { background: var(--etk-soft); }
+/* 손가락 기기: › 를 누르기 쉽게 넓힘 */
+@media (hover: none) { #etk_dialog .etk-row-go { padding: 10px 6px 10px 14px; margin: -10px -4px -10px 0; } }
+#etk_dialog .etk-row-off .etk-row-text { opacity: .55; }
+#etk_dialog .etk-row-go { flex: none; opacity: .35; font-size: .8em; }
+#etk_dialog .etk-paused-note { margin: 8px 4px 0; font-size: .9em; font-weight: 600; }
+/* 세부 설정 화면 */
+#etk_dialog .etk-detail { padding: 8px 4px; }
+#etk_dialog .etk-detail-on { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; cursor: pointer; font-weight: 600; }
+#etk_dialog .etk-detail-on input { margin: 0; }
+#etk_dialog .etk-detail-desc { font-size: .88em; opacity: .7; margin-bottom: 10px; word-break: keep-all; }
+#etk_dialog .etk-detail .etk-options { margin: 6px 0 0; padding: 12px 0 0; border-top: 1px solid var(--etk-line); background: none; border-radius: 0; }
+/* 휴대폰: 아래에서 올라오는 창, 위 가운데 손잡이를 끌어 높이 조절 */
+@media (max-width: 700px) {
+    #etk_dialog .etk-window { border-radius: 16px 16px 0 0; border-bottom: 0; }
+    #etk_dialog .etk-top { padding-top: 18px; }
+    #etk_dialog .etk-handle { display: block; position: absolute; top: 6px; left: 50%; width: 42px; height: 5px; margin-left: -21px; border-radius: 9px; background: currentColor; opacity: .25; }
+    #etk_dialog .etk-grip { display: none; }
+    #etk_dialog .etk-row { padding: 8px 8px; }
+}
