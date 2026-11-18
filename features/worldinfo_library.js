@@ -35,6 +35,36 @@ const currentBook = () => { const v = editorSelect()?.value; const i = Number(v)
 async function loadSummary() {
     try { const res = await fetch('/api/plugins/breeze-server/worldinfo-summary', { headers: ctx().getRequestHeaders() }); summary = res.ok ? await res.json() : {}; } catch { summary = {}; }
 }
+// 항목 줄 표시 뜻: 처음 한 번만 목록 위에 작게(× 로 닫으면 다시 안 뜸). 동그라미는 실리태번 상태 고르기 칸 그대로(🔵 상시 · 🟢 키워드 · 🔗 벡터)
+const LEGEND_KEY = 'breeze.wiLegendSeen';
+const legendSeen = () => { try { return localStorage.getItem(LEGEND_KEY) === '1'; } catch { return false; } };
+const LEGEND = '<div class="etk-wip-legend"><span>🔵 늘 들어감</span><span>🟢 키워드가 나오면 들어감</span><span>🔗 비슷한 내용이면 들어감</span><span>오른쪽 숫자는 토큰 수</span><i class="fa-solid fa-xmark etk-wip-legend-x interactable" tabindex="0" title="닫기"></i></div>';
+// 월드인포 목록 줄의 토큰 수: 켜진 항목 내용을 이어 붙여 한 번에 셈(항목마다 세면 요청이 수백 번). 파일 시각이 같으면 이 기기에 적어 둔 값
+const BOOK_TOK_KEY = 'breeze.wiBookTokens';
+let bookTok = null, tokQueue = [], tokBusy = false;
+const loadBookTok = () => { if (!bookTok) { try { bookTok = JSON.parse(localStorage.getItem(BOOK_TOK_KEY) || '{}'); } catch { bookTok = {}; } } return bookTok; };
+const bookTokOf = (n) => { const t = loadBookTok()[n], s = summary[n]; return t && s && t.m === s.mtime ? t.n : null; };
+function queueBookTokens(names) {
+    for (const n of names) if (summary[n] && bookTokOf(n) == null && !tokQueue.includes(n)) tokQueue.push(n);
+    if (tokBusy) return;
+    tokBusy = true;
+    (async () => {
+        let changed = false;
+        while (tokQueue.length) {
+            const n = tokQueue.shift();
+            try {
+                const data = await loadWorldInfo(n);
+                const text = Object.values(data?.entries || {}).filter(e => !e?.disable).map(e => String(e?.content || '')).join('\n');
+                const all = loadBookTok(); all[n] = { m: summary[n]?.mtime, n: await tokensOf(text) }; changed = true;
+                const el = side?.querySelector(`.etk-wip-book[data-book="${CSS.escape(n)}"] .etk-wip-tokn`);
+                if (el) el.textContent = ` · ${kTok(all[n].n)} 토큰`;
+            } catch { /* 이 월드인포는 건너뜀 */ }
+        }
+        if (changed) { try { localStorage.setItem(BOOK_TOK_KEY, JSON.stringify(loadBookTok())); } catch { /* 이번만 */ } }
+        tokBusy = false;
+    })();
+}
+const kTok = (n) => n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
 async function tokensOf(text) {
     const t = String(text || '');
     if (!t) return 0;
@@ -58,19 +88,28 @@ function pickBook(name) {
     renderSide();
 }
 
-// 처음엔 폴더를 일일이 만들 필요 없게: 월드인포가 어디에 걸려 있는지로 저절로 나눔(한 월드인포가 여러 곳에 걸려 있으면 그곳마다 보임)
+// 캐릭터에 걸린 월드인포(카드에 붙은 것 + 추가로 고른 것)
+const charBooks = (ch, extra) => [ch?.data?.extensions?.world, ...(extra.get(String(ch?.avatar || '').replace(/\.[^.]+$/, '')) || [])].filter(Boolean);
+// 월드인포 → 걸린 캐릭터들(목록 줄 사진용)
+function charsByBook() {
+    const extra = new Map((world_info?.charLore || []).map(x => [x.name, x.extraBooks || []])), out = new Map();
+    for (const ch of ctx().characters || []) for (const n of charBooks(ch, extra)) { if (!out.has(n)) out.set(n, []); if (!out.get(n).some(x => x.avatar === ch.avatar)) out.get(n).push(ch); }
+    return out;
+}
+// 처음엔 폴더를 일일이 만들 필요 없게: 월드인포가 어디에 걸려 있는지로 저절로 나눔(여러 곳에 걸려 있으면 먼저 나오는 묶음 한 곳에만)
 // 내 폴더가 하나라도 있으면 그쪽을 먼저 보여 줌(사용자가 고른 보기는 저장)
 const viewOf = (o) => o.view || (o.folders.length ? 'mine' : 'auto');
 function autoSections(names) {
     const has = new Set(names), used = new Set(), out = [];
     const add = (key, name, books, closed, sub) => {
-        const b = [...new Set(books)].filter(n => has.has(n));
+        // 한 월드인포는 한 곳에만(쓰는 캐릭터가 여럿이면 이번 주 · 이번 달처럼 여러 묶음에 똑같이 떠서 헷갈렸음) → 먼저 나오는 묶음(쓰는 중 → 태그 → 최근 대화 순)에만
+        const b = [...new Set(books)].filter(n => has.has(n) && !used.has(n));
         b.forEach(n => used.add(n));
         if (b.length) out.push({ key, name, books: b, closed, sub });
     };
     const c = ctx(), chars = c.characters || [], curChar = chars[c.characterId];
     const extra = new Map((world_info?.charLore || []).map(x => [x.name, x.extraBooks || []]));
-    const booksOf = (ch) => [ch?.data?.extensions?.world, ...(extra.get(String(ch?.avatar || '').replace(/\.[^.]+$/, '')) || [])].filter(Boolean);
+    const booksOf = (ch) => charBooks(ch, extra);
     // ① 지금 채팅에 들어가는 것: 모든 채팅에 켠 것 · 이 캐릭터 · 이 채팅 · 지금 페르소나
     add('now', '지금 채팅에 쓰는 중', [...(selected_world_info || []), ...booksOf(curChar), chat_metadata?.[METADATA_KEY], power_user?.persona_description_lorebook].filter(Boolean), false);
     // ② 캐릭터에 붙인 태그(실리태번 캐릭터 목록의 태그)별. 태그가 없는 캐릭터는 마지막 대화 시기별(이번 주 · 이번 달 · 그 전)
@@ -193,15 +232,24 @@ function renderSide() {
     if (!side.querySelector('.etk-wip-sidehead')) {
         // 휴대폰 맨 위 한 줄: 월드인포 고르기 · 더 보기(새 항목 + 는 ⋯ 안 실리태번 줄에)(실리태번 버튼 줄은 ⋯ 안으로)
         side.innerHTML = `<div class="etk-wip-top"><div class="etk-wip-now" tabindex="0"><i class="fa-solid fa-folder-open"></i><span></span><i class="fa-solid fa-chevron-down"></i></div><div class="menu_button etk-wip-more fa-solid fa-ellipsis" title="더 보기"></div></div>
-            <div class="etk-wip-sidebody"><div class="etk-wip-sidehead"><input type="search" class="text_pole etk-wip-find" placeholder="월드인포 찾기"></div><div class="etk-wip-views"><span class="etk-wip-view" data-view="auto" tabindex="0">연결별</span><span class="etk-wip-view" data-view="mine" tabindex="0">내 폴더</span></div><div class="etk-wip-tree"></div></div>`;
+            <div class="etk-wip-sidebody"><div class="etk-wip-sidehead"><input type="search" class="text_pole etk-wip-find" placeholder="월드인포 찾기"></div><div class="etk-wip-viewrow"><div class="etk-wip-views"><span class="etk-wip-view" data-view="auto" tabindex="0">연결별</span><span class="etk-wip-view" data-view="mine" tabindex="0">내 폴더</span></div><div class="menu_button etk-wip-newfolder fa-solid fa-folder-plus" tabindex="0" title="새 폴더"></div></div><div class="etk-wip-tree"></div></div>`;
     }
     const q = nfc(side.querySelector('.etk-wip-find')?.value || '').toLowerCase();
     const show = (n) => !q || nfc(n).toLowerCase().includes(q);
     const globalSet = new Set(selected_world_info || []), chatBook = chat_metadata?.[METADATA_KEY];
-    const bookRow = (n, sub) => {
-        const s = summary[n], on = n === cur, picked = ui.pickedBooks.has(n);
-        const mark = globalSet.has(n) ? '<i class="fa-solid fa-earth-asia etk-wip-mark" title="모든 채팅"></i>' : chatBook === n ? '<i class="fa-solid fa-comment etk-wip-mark" title="지금 채팅"></i>' : '';
-        return `<div class="etk-wip-book${on ? ' etk-on' : ''}${picked ? ' etk-picked' : ''}" data-book="${esc(n)}" tabindex="0">${ui.pickBooks ? `<input type="checkbox" tabindex="-1"${picked ? ' checked' : ''}>` : ''}<span class="etk-wip-bname">${esc(n)}${sub?.get(n) ? `<small class="etk-wip-who">${esc(sub.get(n).join(', '))}</small>` : ''}</span>${mark}${s ? `<small>${s.entries}</small>` : ''}</div>`;
+    const personaBooks = new Set(Object.values(power_user?.persona_descriptions || {}).map(d => d?.lorebook).filter(Boolean));
+    const byBook = charsByBook(), c = ctx(), shownBooks = [];
+    const thumb = (ch) => { try { return c.getThumbnailUrl('avatar', ch.avatar); } catch { return `/thumbnail?type=avatar&file=${encodeURIComponent(ch.avatar)}`; } };
+    // 줄: 위는 이름(잘리지 않게 줄바꿈), 아래는 걸린 캐릭터 사진(셋 + n, 캐릭터가 없으면 어디에 켜 뒀는지) · 켜진 항목 / 전체 · 켜진 항목 토큰
+    const bookRow = (n) => {
+        const s = summary[n], on = n === cur, picked = ui.pickedBooks.has(n), chars = byBook.get(n) || [];
+        shownBooks.push(n);
+        const where = chars.length
+            ? `<span class="etk-wip-avs" title="${esc(chars.map(x => x.name).join(', '))}">${chars.slice(0, 3).map(ch => `<img src="${esc(thumb(ch))}" alt="" loading="lazy">`).join('')}${chars.length > 3 ? `<b>+${chars.length - 3}</b>` : ''}</span>`
+            : globalSet.has(n) ? '<span class="etk-wip-where">모든 채팅</span>' : chatBook === n ? '<span class="etk-wip-where">이 채팅</span>' : personaBooks.has(n) ? '<span class="etk-wip-where">페르소나</span>' : '';
+        const tok = bookTokOf(n);
+        const meta = s ? `<span class="etk-wip-bmeta">켜짐 ${s.enabled} / ${s.entries}<span class="etk-wip-tokn">${tok != null ? ` · ${kTok(tok)} 토큰` : ''}</span></span>` : '';
+        return `<div class="etk-wip-book${on ? ' etk-on' : ''}${picked ? ' etk-picked' : ''}" data-book="${esc(n)}" tabindex="0">${ui.pickBooks ? `<input type="checkbox" tabindex="-1"${picked ? ' checked' : ''}>` : ''}<span class="etk-wip-bcol"><span class="etk-wip-bname">${esc(n)}</span>${where || meta ? `<span class="etk-wip-bsub">${where}${meta}</span>` : ''}</span></div>`;
     };
     const folder = (f, books, real, auto, sub) => {
         const shown = books.filter(n => show(n) || (sub?.get(n) || []).some(show));
@@ -224,7 +272,8 @@ function renderSide() {
     if (!foot) { foot = document.createElement('div'); foot.className = 'etk-wip-sidefoot'; side.querySelector('.etk-wip-sidebody').append(foot); }
     foot.innerHTML = ui.pickBooks
         ? `<span class="etk-wip-count">${ui.pickedBooks.size}개 선택</span><span class="etk-wip-gap"></span><div class="menu_button etk-wip-tofolder${ui.pickedBooks.size ? '' : ' disabled'}">옮길 폴더 고르기</div><div class="menu_button etk-wip-pickbooks">끝내기</div>`
-        : `<div class="menu_button etk-wip-newfolder etk-wip-wide"><i class="fa-solid fa-folder-plus"></i> 새 폴더</div>${view === 'mine' && o.folders.length ? '<small class="etk-wip-draghint">월드인포를 끌어서 폴더에 넣어요</small>' : ''}`;
+        : `${view === 'mine' && o.folders.length ? '<small class="etk-wip-draghint">월드인포를 끌어서 폴더에 넣어요</small>' : ''}`;
+    foot.hidden = !foot.innerHTML;   // 새 폴더 버튼은 보기 줄 옆 작은 버튼으로(아래 한 줄을 통째로 차지했음)
     side.querySelector('.etk-wip-now span').textContent = cur || '월드인포 고르기';
     const wi = document.getElementById('WorldInfo');
     wi?.classList.toggle('etk-wip-sheet', ui.sideOpen);
@@ -234,6 +283,7 @@ function renderSide() {
     if (mb) { mb.classList.toggle('etk-on', !!ui.moreOpen); mb.classList.toggle('fa-ellipsis', !ui.moreOpen); mb.classList.toggle('fa-xmark', !!ui.moreOpen); mb.title = ui.moreOpen ? '버튼 줄 닫기' : '실리태번 버튼 줄 · 정렬 · 다시 불러오기'; }
     side.classList.toggle('etk-open', ui.sideOpen);
     side.querySelector('.etk-wip-tree').innerHTML = tree;
+    if (Object.keys(summary).length) queueBookTokens(shownBooks);   // 펼친 폴더에 보이는 것만 셈
 }
 
 // ── ② 편집 목록 꾸미기
@@ -284,7 +334,7 @@ async function decorate() {
         if (!typingNow) {
             bar.innerHTML = ui.selecting
                 ? `<div class="etk-wip-row"><span class="etk-wip-count">${n}개 선택</span><span class="etk-wip-gap"></span><div class="menu_button etk-wip-pick">끝내기</div></div>`
-                : `<div class="etk-wip-row"><div class="etk-wip-row etk-wip-chips">${chip('all', '전체')}${chip('on', '켜짐')}${chip('off', '꺼짐')}${chip('fired', '방금 발동')}${chip('problem', '키워드 없음')}</div><span class="etk-wip-gap"></span><div class="menu_button etk-wip-pick">항목 선택</div></div>`;
+                : `<div class="etk-wip-row"><div class="etk-wip-row etk-wip-chips">${chip('all', '전체')}${chip('on', '켜짐')}${chip('off', '꺼짐')}${chip('fired', '방금 발동')}${chip('problem', '키워드 없음')}</div><span class="etk-wip-gap"></span><div class="menu_button etk-wip-pick">항목 선택</div></div>${legendSeen() ? '' : LEGEND}`;
             // 할 일 버튼은 목록 뒤 칸에 두고 화면 아래에 붙임(목록 위에 있으면 고르다 매번 올려야 했음)
             let foot = l.parentElement.querySelector(':scope > .etk-wip-actfoot');
             if (ui.selecting) { if (!foot) { foot = document.createElement('div'); foot.className = 'etk-wip-actfoot'; l.after(foot); foot.addEventListener('click', onBarClick); } foot.innerHTML = `<div class="etk-wip-row etk-wip-acts"><div class="menu_button etk-wip-act${dis}" data-act="on">켜기</div><div class="menu_button etk-wip-act${dis}" data-act="off">끄기</div><div class="menu_button etk-wip-act${dis}" data-act="group">묶음으로</div><div class="menu_button etk-wip-act${dis}" data-act="move">다른 월드인포로</div><div class="menu_button etk-wip-act etk-wip-danger${dis}" data-act="delete">지우기</div></div>`; }
@@ -483,6 +533,7 @@ async function onSideClick(e) {
 }
 async function onBarClick(e) {
     const t = e.target, o = opts(), hit = (s) => t.closest(s), book = currentBook();
+    if (hit('.etk-wip-legend-x')) { try { localStorage.setItem(LEGEND_KEY, '1'); } catch { /* 이번만 */ } hit('.etk-wip-legend')?.remove(); return; }
     if (hit('.etk-wip-pick')) { ui.selecting = !ui.selecting; ui.picked.clear(); document.activeElement?.blur?.(); return decorate(); }
     if (hit('.etk-wip-chip')) { ui.chip = hit('.etk-wip-chip').dataset.chip; document.activeElement?.blur?.(); return decorate(); }
     if (hit('.etk-wip-act')) { if (!hit('.disabled')) await act(hit('.etk-wip-act').dataset.act); return; }

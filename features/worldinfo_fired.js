@@ -9,7 +9,9 @@ import { getSortedEntries } from '../../../../world-info.js';
 
 // 예전 답(이 기능을 켜기 전에 만든 답): 실리태번이 이 기기 브라우저에 남긴 프롬프트 내역(그 답을 만들 때 보낸 프롬프트 전체)에
 // 지금 이 채팅에 걸린 월드인포 항목의 내용이 들어 있는지 대조해 찾음. 찾은 것은 r: 1 로 표시(새 답의 기록과 구분).
-// 매크로({{char}} 등)는 지금 값으로 바꿔서 대조하고, 내용 앞 · 뒤 조각이 둘 다 있으면 들어간 것으로 봄. 이 기기에서 만든 답 · 내역이 남은 답만.
+// 매크로({{char}} 등)는 지금 값으로 바꿔서 대조하고, 내용 전체(띄어쓰기 · 줄바꿈만 맞춰서)가 그대로 들어 있어야 들어간 것으로 봄.
+// (앞 · 뒤 60자만 따로 찾았더니 첫머리와 끝이 같은 항목들(상태창 A · B · C 같은)이 하나만 들어가도 전부 들어간 것으로 잡혔음)
+// 이 기기에서 만든 답 · 내역이 남은 답만. 예전 방식으로 찾아 둔 목록(rv 없음)은 다시 찾음.
 // 화면에 그려진 답만, 한가할 때 하나씩(긴 채팅에서 한꺼번에 하면 멈춤)
 const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim();
 function promptText(set) {
@@ -25,18 +27,22 @@ async function restoreOld() {
         candidates ??= (await getSortedEntries()).filter(e => String(e.content || '').trim()).map(e => {
             let t = e.content; try { t = api.ctx().substituteParams(t); } catch { /* 매크로 그대로 */ }
             t = norm(t);
-            return { w: e.world, u: e.uid, c: !!e.constant, t: String(e.comment || (e.key || []).join(', ') || '(제목 없음)').normalize('NFC'), head: t.slice(0, 60), tail: t.slice(-60) };
+            return { w: e.world, u: e.uid, c: !!e.constant, t: String(e.comment || (e.key || []).join(', ') || '(제목 없음)').normalize('NFC'), full: t };
         });
         while (restoreQueue.length) {
             const id = restoreQueue.shift();
             const msg = api.ctx().chat?.[id];
-            if (!msg || msg.is_user || msg.is_system || Array.isArray(msg.extra?.[KEY])) continue;
+            const had = msg?.extra?.[KEY];
+            const oldGuess = Array.isArray(had) && had.length && had.every(x => x.r && x.rv !== RV);
+            if (!msg || msg.is_user || msg.is_system || (Array.isArray(had) && !oldGuess)) continue;
+            // 대조할 기록이 없으면 예전 방식으로 찾아 둔 목록은 맞는지 알 수 없어서 지움
+            const drop = () => { if (!oldGuess) return; delete msg.extra[KEY]; const sw = msg.swipe_info?.[msg.swipe_id]; if (sw?.extra) delete sw.extra[KEY]; const el = document.querySelector(`#chat > .mes[mesid="${id}"]`); if (el) paint(el); };
             const set = [...(itemizedPrompts || [])].reverse().find(x => x?.mesId === id);
-            if (!set) continue;
+            if (!set) { drop(); continue; }
             const text = promptText(set);
-            if (!text) continue;
-            const found = candidates.filter(c => text.includes(c.head) && text.includes(c.tail)).map(({ w, u, c, t }) => ({ w, u, c, t, r: 1 }));
-            if (!found.length) continue;
+            if (!text) { drop(); continue; }
+            const found = candidates.filter(c => c.full && text.includes(c.full)).map(({ w, u, c, t }) => ({ w, u, c, t, r: 1, rv: RV }));
+            if (!found.length) { drop(); continue; }
             msg.extra ??= {};
             msg.extra[KEY] = found;
             const el = document.querySelector(`#chat > .mes[mesid="${id}"]`); if (el) paint(el);
@@ -51,6 +57,7 @@ function queueOld() {
 }
 
 const KEY = 'breeze_wi';
+const RV = 2;   // 예전 답 찾기 방식 판(바꾸면 예전 방식으로 찾아 둔 목록을 다시 찾음)
 let api = null, pending = null, offs = [], observer = null;
 const ctx = () => api.ctx();
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
