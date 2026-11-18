@@ -396,7 +396,8 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 /* 업데이트 내역 창: 화면을 크게 가리지 않게 작게(사용자 2026-11-17). 창 폭은 실리태번 팝업 기본(500px)보다 좁게 */
 .popup:has(.etk-changelog) { width: min(420px, 94vw) !important; min-width: 0 !important; }
 .etk-changelog { text-align: left; display: flex; flex-direction: column; height: min(54vh, 420px); }
-.etk-changelog h3 { margin: 0 0 10px; flex: none; }
+/* 제목: 테마 제목 글꼴이 줄 높이(작게 묶어 둠)보다 커서 글자가 칸 밖으로 넘쳐 아래 첫 판 줄과 겹치고 잘렸음 → 줄 높이를 글자에 맞춤 */
+.etk-changelog h3 { margin: 0 0 10px; flex: none; line-height: 1.35 !important; padding: 2px 0 !important; overflow: visible; }
 .etk-changelog .etk-cl-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .etk-changelog .etk-cl-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .etk-changelog .etk-cl-head small { opacity: .65; }

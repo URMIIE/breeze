@@ -557,11 +557,9 @@ async function showChangelog() {
     const body = v => Array.isArray(v.groups)
         ? v.groups.map(g => `<details class="etk-cl-group"><summary>${esc(g.title)}<small>${(g.items || []).length}</small></summary><div class="etk-cl-body">${list(g.items)}</div></details>`).join('')
         : list(v.items);
-    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3><div class="etk-cl-scroll">${log.map((v, i) => {
-        const head = `<b>${esc(v.version)}</b><small>${esc(v.date || '')}</small>`;
-        // 이번 판은 펼쳐 두고, 지난 판은 판째로 접어 둠
-        return i ? `<details class="etk-cl-old"><summary class="etk-cl-head">${head}</summary><div class="etk-cl-body">${body(v)}</div></details>` : `<section><div class="etk-cl-head">${head}</div>${body(v)}</section>`;
-    }).join('')}</div><a class="etk-cl-all" href="https://github.com/URMIIE/breeze/blob/main/CHANGELOG.md" target="_blank" rel="noopener">지난 내역 전체 보기</a></div>`;
+    // 창엔 이번 판만, 지난 판은 아래 링크(GitHub 전체 내역)로: 지난 판을 창에도 접어 두니 링크와 겹쳐 쓸데없었음
+    const v = log[0];
+    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3><div class="etk-cl-scroll"><section><div class="etk-cl-head"><b>${esc(v.version)}</b><small>${esc(v.date || '')}</small></div>${body(v)}</section></div><a class="etk-cl-all" href="https://github.com/URMIIE/breeze/blob/main/CHANGELOG.md" target="_blank" rel="noopener">지난 내역 전체 보기</a></div>`;
     if (version && settings().seenLog !== version) { settings().seenLog = version; save(); }
     if (!showChangelog.wired) {
         showChangelog.wired = true;

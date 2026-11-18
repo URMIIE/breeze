@@ -204,7 +204,7 @@ export function options(box, a) {
         const o = a.options(); o.pins ??= []; o.hidden ??= []; o.menuOrder ??= [];
         const keepTop = box.querySelector('.etk-pin-list')?.scrollTop || 0;   // 다시 그려도 보던 자리 그대로
         const sort = o.listSort === 'name' ? 'name' : 'base';
-        box.innerHTML = '<div class="etk-flex etk-pin-head"><small class="etk-pin-legend"><span><i class="fa-solid fa-arrows-up-down"></i>끌어서 순서 바꾸기 · ↑↓ 한 칸씩</span><span><i class="fa-solid fa-thumbtack"></i>바로 표시</span><span><i class="fa-solid fa-eye-slash"></i>숨기기</span></small><select class="text_pole etk-pin-sort"><option value="base">켜진 순서</option><option value="name">이름순</option></select></div>'
+        box.innerHTML = '<div class="etk-flex etk-pin-head"><small class="etk-pin-legend"><span>끌어서 순서 바꾸기 · ↑↓ 한 칸씩</span><span><i class="fa-solid fa-thumbtack"></i>바로 표시</span><span><i class="fa-solid fa-eye-slash"></i>숨기기</span></small><select class="text_pole etk-pin-sort"><option value="base">켜진 순서</option><option value="name">이름순</option></select></div>'
             + (takenByOther ? '<small class="etk-rest">다른 확장이나 테마가 버튼을 꺼내 두고 있어서 고정은 쉬고 있어요</small>' : '');
         // 목록은 지금 화면에 있는 버튼만이 아니라 한 번이라도 본 버튼까지(번역 · QuickActions 처럼 확장이 메시지에 붙이는 버튼은 채팅을 열어야만 화면에 있어서,
         // 채팅을 안 열면 고정해 둔 버튼이 목록에서 빠져 고정이 풀린 것처럼 보였음) — 본 버튼의 이름 · 아이콘을 적어 두고 없을 땐 그걸로
