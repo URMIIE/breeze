@@ -650,14 +650,36 @@ export function start(a) {
     optWatch.observe(editorSelect(), { childList: true });
     offs.push(() => optWatch.disconnect());
     const { eventSource, eventTypes } = ctx();
-    const onFire = (entries) => { fired.clear(); for (const e of entries || []) fired.add(`${e.world}|${e.uid}`); };
+    // '방금 발동': 마지막 답에 적힌 기록('답에 들어간 월드인포'가 답마다 적음)이 있으면 그걸로 셈. 없으면 실리태번 신호로.
+    // 신호만 쓰니 ① 들어간 항목이 0개면 신호가 안 와서 그 전 답 목록이 남았고 ② 다른 확장의 숨은 생성(quiet)도 같은 신호를 보내 마지막 답과 달랐음
+    // → 생성이 시작되면 비우고, 숨은 생성의 신호는 무시
+    let genType = null;
+    const fromLastReply = (clearIfNone) => {
+        const chat = ctx().chat || [];
+        for (let i = chat.length - 1; i >= 0; i--) {
+            const m = chat[i];
+            if (!m || m.is_user || m.is_system) continue;
+            const list = m.extra?.breeze_wi;
+            if (Array.isArray(list)) { fired.clear(); for (const x of list) fired.add(`${x.w}|${x.u}`); return; }
+            break;
+        }
+        if (clearIfNone) fired.clear();
+    };
+    const refreshFired = (clearIfNone) => { fromLastReply(clearIfNone); if (document.getElementById('WorldInfo')?.classList.contains('openDrawer')) scheduleDecorate(); };
+    const onStart = (type, _o, dryRun) => { if (dryRun) return; genType = type; if (type !== 'quiet') fired.clear(); };
+    const onFire = (entries) => { if (genType === 'quiet') return; fired.clear(); for (const e of entries || []) fired.add(`${e.world}|${e.uid}`); };
     let worldTimer = 0;
     const onWorld = () => { clearTimeout(worldTimer); worldTimer = setTimeout(async () => { await loadSummary(); renderSide(); scheduleDecorate(); }, 400); };
     // 캐릭터 편집 · 채팅 바꾸기 신호는 자주 옴(캐릭터 칸에 글자를 칠 때마다) → 월드인포 창이 닫혀 있으면 그리지 않고(창을 열 때 다시 그림), 열려 있으면 잠잠해진 뒤 한 번
     let sideTimer = 0;
     const onSettings = () => { clearTimeout(sideTimer); if (!document.getElementById('WorldInfo')?.classList.contains('openDrawer')) return; sideTimer = setTimeout(renderSide, 150); };
     const on = (n, fn) => { eventSource.on(n, fn); offs.push(() => eventSource.removeListener(n, fn)); };
+    on(eventTypes.GENERATION_STARTED, onStart);
     on(eventTypes.WORLD_INFO_ACTIVATED, onFire);
+    // 답이 붙은 뒤(기록은 같은 신호에서 적히니 한 박자 뒤에) · 스와이프 · 지우기 · 채팅 바꾸기에 마지막 답 기록으로 다시 맞춤
+    on(eventTypes.MESSAGE_RECEIVED, () => setTimeout(() => refreshFired(false), 50));
+    for (const n of ['MESSAGE_SWIPED', 'MESSAGE_DELETED', 'CHAT_CHANGED']) if (eventTypes[n]) on(eventTypes[n], () => setTimeout(() => refreshFired(true), 50));
+    fromLastReply(false);
     on(eventTypes.WORLDINFO_UPDATED, onWorld);
     on(eventTypes.WORLDINFO_SETTINGS_UPDATED, onSettings);
     on(eventTypes.CHAT_CHANGED, onSettings);
