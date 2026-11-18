@@ -1,3 +1,4 @@
+import { styledBy, fromSheet, theme } from '../lib/who.js';
 // 항목 많은 월드인포 창 가볍게.
 // ① 월드인포 편집 창은 한 쪽에 보이는 항목을 모두 한꺼번에 배치 · 그리기 때문에 항목이 많으면 굴릴 때 버벅인다.
 //    화면 밖 항목은 브라우저가 배치 · 그리기를 건너뛰게 한다(content-visibility). 항목 내용 · 순서 · 저장에는 손대지 않는다.
@@ -20,7 +21,7 @@ function check(list) {
     list.classList.remove('etk-light');
     const taken = getComputedStyle(first).contentVisibility !== 'visible';
     list.classList.toggle('etk-light', !taken);
-    api?.rest(taken ? 'same' : null);
+    if (!taken) api?.rest(null); else api?.rest('same', { saw: "월드인포 항목에 '화면 밖은 안 그리기'(content-visibility)가 이미 걸려 있어요", who: styledBy(first, 'content-visibility', v => !!v && v !== 'visible'), back: '그쪽을 끄면 다음에 월드인포 창을 열 때 breeze가 맡아요.' });
 }
 
 function closeFocusedAutocomplete() {

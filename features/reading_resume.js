@@ -122,7 +122,12 @@ function restore() {
         if (!job.checked) {
             job.checked = true;
             const moved = chat.scrollTop > 0 && chat.scrollHeight - chat.scrollTop - chat.clientHeight > chat.clientHeight * 1.5;   // 그림이 늦게 그려져 조금 떨어진 것은 옮긴 것으로 안 봄
-            if (otherSignal >= opened - 500 || chat.style.opacity === '0' || (moved && !job.jumped)) { resting = true; return finish(); }
+            if (otherSignal >= opened - 500 || chat.style.opacity === '0' || (moved && !job.jumped)) {
+                resting = true;
+                api?.rest?.('same', { saw: otherSignal >= opened - 500 ? "다른 쪽이 '읽던 자리로 옮기는 중' 신호를 냈어요" : chat.style.opacity === '0' ? '채팅을 연 직후 다른 쪽이 채팅을 가려 두었어요' : '채팅을 연 직후 다른 쪽이 먼저 스크롤을 옮겼어요', who: { kind: 'unknown' }, back: '그쪽을 끄면 다음에 채팅을 열 때 breeze가 맡아요.' });
+                return finish();
+            }
+            api?.rest?.(null);
         }
         const mes = chat.querySelector(`:scope > .mes[mesid="${entry.id}"]`);
         const msg = api.ctx().chat?.[entry.id];

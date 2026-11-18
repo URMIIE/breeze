@@ -8,7 +8,7 @@ const otherSearch = (root) => [...root.querySelectorAll('input[type="search"], i
 
 function add(root) {
     if (root.querySelector('.etk-ext-search')) return;
-    if (otherSearch(root)) { api?.rest('same'); return; }
+    if (otherSearch(root)) { api?.rest('same', { saw: '확장 관리 창 위쪽에 breeze 것이 아닌 검색칸이 이미 있어요', who: { kind: 'unknown' }, back: '그쪽을 끄면 다음에 확장 관리 창을 열 때 breeze가 맡아요.' }); return; }
     api?.rest(null);
     const box = document.createElement('div');
     box.className = 'etk-ext-search';
@@ -44,7 +44,7 @@ export function start(a) {
             if (n.nodeType !== 1) continue;
             // 우리 검색칸을 넣은 뒤 다른 확장이 검색칸을 또 넣으면 우리 것을 빼고 쉼(검색칸 두 개가 겹쳐 뜨지 않게)
             const host = n.closest?.('.extensions_info');
-            if (host && host.querySelector('.etk-ext-search') && !n.closest('.etk-ext-search') && otherSearch(host)) { host.querySelector('.etk-ext-search').remove(); api?.rest('same'); continue; }
+            if (host && host.querySelector('.etk-ext-search') && !n.closest('.etk-ext-search') && otherSearch(host)) { host.querySelector('.etk-ext-search').remove(); api?.rest('same', { saw: '확장 관리 창 위쪽에 breeze 것이 아닌 검색칸이 이미 있어요', who: { kind: 'unknown' }, back: '그쪽을 끄면 다음에 확장 관리 창을 열 때 breeze가 맡아요.' }); continue; }
             if (n.matches('.extensions_info')) add(n);
             else if (n.firstElementChild) n.querySelectorAll('.extensions_info').forEach(add);
         }

@@ -1,3 +1,4 @@
+import { fromStack } from '../lib/who.js';
 // 답 · 번역이 끝나면 소리로 알리기.
 // 답 생성이 끝났을 때, 그리고 ‘답 말고도 알릴 때’에 등록해 둔 다른 확장의 끝남 신호(번역 완료 등)가 왔을 때 짧은 소리를 낸다.
 // 신호마다 알아볼 이름을 붙여 체크칸으로 켜고 끈다(옵션 signals = [{ name, event, on }]).
@@ -19,6 +20,7 @@ const TONES = {
     rise: { name: '올라가는 세 음', notes: [[659, 0], [880, 0.12], [1175, 0.24]] },
 };
 let myPlay = null;
+let lastOtherStack = '';
 let api = null, listeners = [], docListeners = [], lastOtherPlay = 0, origPlay = null, ours = false, ctxAudio = null, stopFinding = null, unwatchSignals = null, redrawSeen = null;
 const seen = new Map();   // 신호 이름 → { count, from }
 
@@ -91,9 +93,10 @@ function playNotes(ctxAudio, tone, o, volume) {
 
 // 같은 일을 두 신호가 알릴 때(답이 그려짐 + 다른 확장의 ‘답 붙음’) 한 번만
 const COOLDOWN = 1500;
+const SOUND_CORE = { saw: "실리태번 설정의 '메시지 소리'가 켜져 있어요", who: { kind: 'core' }, back: '실리태번의 메시지 소리를 끄면 breeze가 울려요.' };
 let lastBeep = 0;
 function notify(why = '', key = 'main') {
-    if (api.ctx().powerUserSettings?.play_message_sound) return;   // 실리태번이 직접 냄
+    if (api.ctx().powerUserSettings?.play_message_sound) { api.rest('same', SOUND_CORE); return; }   // 실리태번이 직접 냄
     // 아이폰에서 노래와 섞어 울릴 땐 다른 탭에선 소리를 못 내서 이 칸은 안 씀(켜 두면 아예 안 울림)
     if (api.options().onlyHidden && !quietIOS() && document.visibilityState === 'visible' && document.hasFocus()) return;
     const at = Date.now();
@@ -101,7 +104,10 @@ function notify(why = '', key = 'main') {
     lastBeep = at;
     log(why);
     // 다른 확장이 같은 순간에 소리를 내는지 잠깐 보고
-    setTimeout(() => { if (lastOtherPlay < at - 300) beep(toneOf(key)); }, 250);
+    setTimeout(() => {
+        if (lastOtherPlay < at - 300) { api.rest(null); beep(toneOf(key)); return; }
+        api.rest('same', { saw: '답이 끝난 순간 다른 쪽이 이미 소리를 냈어요', who: fromStack(lastOtherStack), back: '그쪽 소리가 멈추면 다음 답부터 breeze가 울려요.' });
+    }, 250);
 }
 const log = (why) => { if (why) console.debug(`[Breeze] 완료 소리: ${why}`); };
 
@@ -381,6 +387,7 @@ function extensionName(folder) {
 
 export function start(a) {
     api = a;
+    if (api.ctx().powerUserSettings?.play_message_sound) api.rest('same', SOUND_CORE);
     watchSignals();
     // 깔린 확장의 ‘일 끝남’ 신호를 한가할 때 찾아 저절로 들음(찾은 결과는 확장 판이 같으면 기억해 둔 것을 씀)
     (window.requestIdleCallback || setTimeout)(() => scanSignals().then(m => { autoSignals = m; if (api) listenSignals(); }));
@@ -455,7 +462,7 @@ export function start(a) {
     if (!origPlay) {
         origPlay = HTMLMediaElement.prototype.play;
         myPlay = HTMLMediaElement.prototype.play = function () {
-            if (!ours && this.tagName === 'AUDIO') lastOtherPlay = Date.now();
+            if (!ours && this.tagName === 'AUDIO') { lastOtherPlay = Date.now(); lastOtherStack = new Error().stack || ''; }
             return origPlay.apply(this, arguments);
         };
     }

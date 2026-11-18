@@ -1,3 +1,4 @@
+import { styledBy, fromSheet, theme } from '../lib/who.js';
 // 긴 채팅에서 화면 밖 메시지 안 그리기.
 // 메시지가 많으면 화면에 안 보이는 메시지까지 배치 · 그리기를 해서, 굴리거나 답이 흘러 들어올 때 버벅인다.
 // 화면에서 먼 메시지만 브라우저가 배치 · 그리기를 건너뛰게 한다(content-visibility: auto).
@@ -60,7 +61,12 @@ function check() {
     // 우리 규칙을 뗀 상태에서: 이미 건너뛰게 돼 있거나, 그려져 있어야 할 메시지가 감춰져 있으면 다른 쪽이 하는 중
     const cs = getComputedStyle(sample);
     const hidden = [...chat.querySelectorAll(':scope > .mes')].slice(0, 30).some(m => m.style.display === 'none' || m.hidden);
-    if (cs.contentVisibility !== 'visible' || hidden) { api?.rest?.('same'); return; }
+    if (cs.contentVisibility !== 'visible' || hidden) {
+        api?.rest?.('same', hidden
+            ? { saw: '채팅의 메시지 일부가 이미 감춰져 있어요(다른 쪽이 안 보이는 메시지를 숨기는 중)', who: { kind: 'unknown' }, back: '그쪽을 끄면 다음에 채팅을 열 때 breeze가 맡아요.' }
+            : { saw: "메시지에 '화면 밖은 안 그리기'(content-visibility)가 이미 걸려 있어요", who: styledBy(sample, 'content-visibility', v => !!v && v !== 'visible'), back: '그쪽을 끄면 다음에 채팅을 열 때 breeze가 맡아요.' });
+        return;
+    }
     api?.rest?.(null);
     chat.classList.add('etk-lazy-render');
     io = new IntersectionObserver(onIntersect, { root: chat, rootMargin: '100% 0px 100% 0px' });

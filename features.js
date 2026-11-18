@@ -14,6 +14,8 @@ export const FEATURES = [
     { id: 'chat_list_preview', group: '목록 · 설정 창', name: '미리보기를 화면과 같게', desc: '미리보기에도 번역 · 정규식을 적용해 채팅 화면과 같은 글로 표시' },
     { id: 'extension_search', group: '목록 · 설정 창', name: '확장 관리 창 검색칸', desc: '‘확장 관리’ 창 상단에 검색칸 추가' },
     { id: 'toast_filter', hasOptions: true, group: '목록 · 설정 창', name: '알림 숨기기', desc: '고른 알림은 다음부터 표시 생략' },
+    { id: 'chat_file_list', added: '1.2.0', hasOptions: true, group: '목록 · 설정 창', name: '채팅 파일 관리 창 보기 쉽게', desc: '채팅을 열지 않고 처음 · 끝 대화 보기, 정렬, 여러 개 골라 내보내기 · 지우기. 지운 채팅은 정한 날수만큼 보관' },
+    { id: 'worldinfo_library', added: '1.2.0', group: '목록 · 설정 창', name: '월드인포 창 정리', desc: '월드인포 창 왼쪽에 폴더 · 월드인포 목록, 항목은 한 줄로 접고 묶음 · 거르기 · 여러 개 골라 켜고 끄기' },
     { id: 'wi_real_tokens', group: '목록 · 설정 창', name: '월드인포 토큰 수 정확하게', desc: '월드인포 항목마다 AI에게 실제로 보내는 토큰 수로 표시' },
     { id: 'theme_scripts', hasOptions: true, group: '꾸미기', name: '테마 스크립트 자동 켜기', desc: '테마마다 정해 둔 스크립트를 그 테마를 쓸 때만 실행' },
     { id: 'loading_screen', hasOptions: true, group: '꾸미기', name: '로딩 화면', desc: '실리태번을 열 때 뜨는 로딩 화면 모양 선택 · 내 CSS 적용' },
@@ -25,5 +27,6 @@ export const FEATURES = [
     { id: 'light_chat_manager', group: '가볍게', name: '보이는 채팅 파일만 그리기', desc: '채팅 파일이 많아도 관리 창이 덜 버벅임. 화면에 보이는 줄만 그림' },
     { id: 'light_worldinfo', group: '가볍게', name: '보이는 월드인포 항목만 그리기', desc: '항목이 많아도 스크롤할 때 덜 버벅임. 화면에 보이는 항목만 그림' },
     { id: 'lazy_avatars', group: '가볍게', name: '보이는 프로필 사진만 불러오기', desc: '캐릭터 · 페르소나 목록이 길어도 빨리 뜸. 화면에 보이는 사진부터 불러옴' },
+    { id: 'worldinfo_fired', added: '1.2.0', group: '채팅', name: '답에 들어간 월드인포 보기', desc: '답마다 이름 옆에 월드인포 개수 표시. 누르면 그 답에 들어간 항목 목록' },
     { id: 'done_sound', hasOptions: true, group: '채팅', name: '완료 알림음', desc: '메시지 생성이나 다른 확장의 일이 끝날 때 울리는 알림음' },
 ];

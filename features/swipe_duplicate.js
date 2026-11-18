@@ -1,3 +1,4 @@
+import { commandOwner } from '../lib/who.js';
 // 지금 보는 답을 새 스와이프로 하나 더 — 글만이 아니라 메시지 정보(extra: 번역 등)까지.
 // 글만 복사하면 복사한 쪽으로 넘겼다 오면 번역 같은 덧붙은 정보가 사라진다.
 // 메시지 ⋯ 메뉴 버튼과 명령 /dup(예전 이름 /swipe-dup 도 됨) 둘 다.
@@ -55,22 +56,38 @@ function onClick(e) {
     if (Number.isInteger(id)) duplicateSwipe(id);
 }
 
-export function start() {
+// 명령 이름 /dup(· /swipe-dup)을 다른 쪽이 먼저 쓰고 있으면 덮어쓰지 않고 명령만 쉼(버튼은 그대로). 우리 뒤에 다른 쪽이 덮어써도 같은 표시
+const PART_BACK = '그쪽을 끄고 새로고침하면 breeze 명령도 다시 써요.';
+function partRest(cmd) {
+    commandOwner(cmd).then(w => { if (w) api?.rest('part', { saw: `명령 /${cmd.name}이 이미 다른 쪽 것으로 등록돼 있어서, breeze는 명령만 쉬고 메시지 ⋯ 메뉴 버튼은 그대로 써요`, who: w, back: PART_BACK }); });
+}
+function checkTaken(c) {
+    const cmds = c.SlashCommandParser.commands || {};
+    const now = cmds.dup || cmds['swipe-dup'];
+    if (now && now.callback !== ourCallback) partRest(now);
+}
+let api = null, ourCallback = null;
+export function start(a) {
+    api = a;
     active = true;
     addButtons();
     document.addEventListener('click', onClick);
     document.dispatchEvent(new Event('etk-buttons-changed'));   // 열려 있는 버튼 목록이 바로 다시 그려지게
-    if (commandAdded) return;
     const c = SillyTavern.getContext();
+    if (commandAdded) { checkTaken(c); return; }
+    const taken = c.SlashCommandParser.commands?.dup || c.SlashCommandParser.commands?.['swipe-dup'];
+    if (taken) { partRest(taken); return; }
+    ourCallback = async (args) => (active ? duplicateSwipe(args?.message !== undefined && args.message !== '' ? Number(args.message) : undefined) : '');
     try {
         c.SlashCommandParser.addCommandObject(c.SlashCommand.fromProps({
             name: 'dup',
             aliases: ['swipe-dup'],   // 예전 이름으로 만든 빠른 답장도 그대로 돌게
-            callback: async (args) => (active ? duplicateSwipe(args?.message !== undefined && args.message !== '' ? Number(args.message) : undefined) : ''),
+            callback: ourCallback,
             namedArgumentList: [c.SlashCommandNamedArgument?.fromProps?.({ name: 'message', description: '메시지 번호 (없으면 마지막 AI 메시지)', isRequired: false })].filter(Boolean),
             helpString: '지금 보는 메시지(번역 등 메시지 정보 포함)를 새 스와이프로 하나 더 만들어요.',
         }));
         commandAdded = true;
+        setTimeout(() => active && checkTaken(c), 10000);   // 늦게 켜지는 확장이 같은 이름을 덮어쓴 경우
     } catch (error) { console.warn('[Breeze] /dup', error); }
 }
 

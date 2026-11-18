@@ -65,7 +65,7 @@ function collectButtons() {
             for (const btn of root.querySelectorAll('.mes_buttons .mes_button, .extraMesButtons .mes_button, .extraMesButtons > div[title]')) {
                 const key = keyOf(btn);
                 if (!key || seen.has(key) || hiddenByOthers(btn)) continue;
-                seen.set(key, { key, label: labelOf(btn), mask: maskOf(btn), icon: btn.classList.contains('etk_swipe_dup') ? 'fa-solid fa-angles-right' : [...btn.classList].filter(c => c.startsWith('fa-')).join(' ') });   // 목록은 모두 글꼴 아이콘이라, 직접 그린 화살표 버튼도 같은 꼴의 글꼴 아이콘으로   // 글꼴 아이콘이 없는 breeze 버튼(가는 선 화살표)는 그 버튼 모양 이름을 그대로 써서 아이콘이 보이게
+                seen.set(key, { key, label: labelOf(btn), mask: maskOf(btn), html: [...btn.classList].some(c => c.startsWith('fa-')) ? '' : (btn.querySelector('svg, img, i[class*="fa-"]')?.outerHTML || ''), icon: btn.classList.contains('etk_swipe_dup') ? 'fa-solid fa-angles-right' : [...btn.classList].filter(c => c.startsWith('fa-')).join(' ') });   // 목록은 모두 글꼴 아이콘이라, 직접 그린 화살표 버튼도 같은 꼴의 글꼴 아이콘으로   // 글꼴 아이콘이 없는 breeze 버튼(가는 선 화살표)는 그 버튼 모양 이름을 그대로 써서 아이콘이 보이게
             }
         }
     } finally { if (hideStyle) hideStyle.disabled = false; }
@@ -134,7 +134,7 @@ function placeAll(mesList = document.querySelectorAll('#chat .mes')) {
         const row = mes.querySelector('.mes_buttons');
         if (row?.querySelector(TAKEN)) {
             // 다른 쪽이 꺼내 놓음 → 우리가 꺼낸 것은 제자리로 돌려놓고 쉼(다음에 다시 봄 — 그쪽이 꺼지면 다시 함)
-            if (!takenByOther) { takenByOther = true; api?.rest?.('same'); for (const r of document.querySelectorAll('#chat .mes_buttons')) { const ex = r.querySelector('.extraMesButtons'); if (ex) unplace(r, ex); } }
+            if (!takenByOther) { takenByOther = true; api?.rest?.('same', { saw: '원래 ⋯ 메뉴 안에만 있는 버튼이, breeze가 꺼내지 않았는데 이름 줄에 나와 있어요', who: { kind: 'unknown' }, back: '그쪽을 끄면 다음에 채팅을 열 때 breeze가 맡아요.' }); for (const r of document.querySelectorAll('#chat .mes_buttons')) { const ex = r.querySelector('.extraMesButtons'); if (ex) unplace(r, ex); } }
             return;
         }
         placeOne(mes, list, hidden);
@@ -198,65 +198,133 @@ export function stop() {
 }
 
 export function options(box, a) {
+    // 순서 바꾸기: 화살표로 한 칸씩 옮기던 것을 손잡이(⠿)를 끌어서 한 번에. 휴대폰도 손잡이를 눌러 끌면 됨(손잡이 위에선 화면이 스크롤되지 않음)
+    // 목록은 '메시지에 바로 표시' · '⋯ 메뉴' · '숨김' 세 칸으로 나눠 켜진 것 순서대로 보이게(숨긴 것은 맨 아래). 칸 사이로 끌면 바로 표시 ↔ 메뉴가 바뀜
     const render = () => {
-        const o = a.options(); o.pins ??= []; o.hidden ??= [];
-        const keepTop = box.querySelector('.etk-pin-list')?.scrollTop || 0;   // 순서를 바꿔 다시 그려도 보던 자리 그대로
-        const sort = o.listSort || 'base';
-        box.innerHTML = '<div class="etk-flex etk-pin-head"><small><i class="fa-solid fa-thumbtack"></i> 메시지에 바로 표시 · <i class="fa-solid fa-eye-slash"></i> 숨기기</small><select class="text_pole etk-pin-sort"><option value="base">기본순</option><option value="name">이름순</option><option value="reverse">역순</option></select></div>'
+        const o = a.options(); o.pins ??= []; o.hidden ??= []; o.menuOrder ??= [];
+        const keepTop = box.querySelector('.etk-pin-list')?.scrollTop || 0;   // 다시 그려도 보던 자리 그대로
+        const sort = o.listSort === 'name' ? 'name' : 'base';
+        box.innerHTML = '<div class="etk-flex etk-pin-head"><small class="etk-pin-legend"><span><i class="fa-solid fa-arrows-up-down"></i>끌어서 순서 바꾸기 · ↑↓ 한 칸씩</span><span><i class="fa-solid fa-thumbtack"></i>바로 표시</span><span><i class="fa-solid fa-eye-slash"></i>숨기기</span></small><select class="text_pole etk-pin-sort"><option value="base">켜진 순서</option><option value="name">이름순</option></select></div>'
             + (takenByOther ? '<small class="etk-rest">다른 확장이나 테마가 버튼을 꺼내 두고 있어서 고정은 쉬고 있어요</small>' : '');
-        // 고정한 버튼은 위에 이름 줄 순서대로, 나머지는 ⋯ 메뉴 순서대로 두고 위 · 아래 화살표로 각각 그 안에서 순서를 바꿈
-        o.menuOrder ??= [];
-        const all = collectButtons();
+        // 목록은 지금 화면에 있는 버튼만이 아니라 한 번이라도 본 버튼까지(번역 · QuickActions 처럼 확장이 메시지에 붙이는 버튼은 채팅을 열어야만 화면에 있어서,
+        // 채팅을 안 열면 고정해 둔 버튼이 목록에서 빠져 고정이 풀린 것처럼 보였음) — 본 버튼의 이름 · 아이콘을 적어 두고 없을 땐 그걸로
+        o.known ??= {};
+        const seenNow = collectButtons();
+        let knownChanged = false;
+        for (const b of seenNow) { const k = o.known[b.key]; if (!k || k.label !== b.label || k.icon !== b.icon || (k.html || '') !== (b.html || '')) { o.known[b.key] = { label: b.label, icon: b.icon, html: b.html || '' }; knownChanged = true; } }
+        if (knownChanged) a.save();
+        const all = [...seenNow];
+        for (const key of new Set([...o.pins, ...o.menuOrder, ...o.hidden])) if (!all.some(b => b.key === key) && o.known[key]) all.push({ key, ...o.known[key], mask: '' });
         const pinnedList = o.pins.map(k => all.find(b => b.key === k)).filter(Boolean);
         const rank = k => { const i = o.menuOrder.indexOf(k); return i < 0 ? Infinity : i; };
         const menuList = all.filter(b => !o.pins.includes(b.key)).map((b, i) => [b, i]).sort((x, y) => rank(x[0].key) - rank(y[0].key) || x[1] - y[1]).map(x => x[0]);
-        const base = [...pinnedList, ...menuList];
-        // 보기 순서만 바꿈(실제 버튼 순서는 기본순에서 화살표로) — 이름순 · 역순에서는 화살표를 숨김
-        const shown = sort === 'name' ? [...base].sort((x, y) => x.label.localeCompare(y.label, 'ko')) : sort === 'reverse' ? [...base].reverse() : base;
         const sel = box.querySelector('.etk-pin-sort');
         sel.value = sort;
         sel.addEventListener('change', () => { o.listSort = sel.value; a.save(); render(); });
-        if (sort === 'name') sel.closest('.etk-pin-head').insertAdjacentHTML('afterend', '<small class="etk-pin-hint">순서는 기본순 · 역순에서 화살표로 바꿀 수 있어요.</small>');
-        // 버튼이 많아도 설정 칸이 길어지지 않게 줄은 스크롤되는 목록에
         const list = document.createElement('div');
         list.className = 'etk-pin-list';
         box.append(list);
-        for (const b of shown) {
-            const row = document.createElement('div');
-            row.className = 'etk-pin-row';
-            const pinned = o.pins.includes(b.key);
-            row.innerHTML = `<i class="${b.icon} etk-pin-icon"></i><span></span><div class="etk-pin etk-move fa-solid fa-chevron-up interactable" tabindex="0" title="앞으로"></div><div class="etk-pin etk-move fa-solid fa-chevron-down interactable" tabindex="0" title="뒤로"></div><div class="etk-pin etk-eye fa-solid interactable" tabindex="0"></div><div class="etk-pin etk-tack fa-solid fa-thumbtack interactable" tabindex="0" title="메시지에 바로 표시"></div>`;
-            const move = (d) => {
-                const list = pinned ? o.pins : menuList.map(x => x.key);
-                const at = list.indexOf(b.key), j = at + d;
-                if (j < 0 || j >= list.length) return;
-                [list[at], list[j]] = [list[j], list[at]];
-                if (pinned) placeAll(); else { o.menuOrder = list; applyHidden(); }
-                a.save(); render();
-            };
-            // 역순에서도 화살표로 순서를 바꿈(보이는 방향 그대로: 위 화살표 = 목록에서 위로). 이름순은 이름이 순서를 정해서 화살표 없음
-            const dir = sort === 'reverse' ? -1 : 1;
-            if (sort === 'name') row.querySelectorAll('.etk-move').forEach(m => m.remove());
-            else {
-                row.querySelector('.fa-chevron-up').addEventListener('click', () => move(-dir));
-                row.querySelector('.fa-chevron-down').addEventListener('click', () => move(dir));
-            }
-            row.querySelector('span').textContent = b.label;
-            if (b.mask) { const ic = row.querySelector('.etk-pin-icon'); ic.className = 'etk-pin-icon etk-pin-mask'; ic.style.webkitMaskImage = ic.style.maskImage = b.mask; }
-            const eye = row.querySelector('.etk-eye'), pin = row.querySelector('.etk-tack');
-            const paint = () => {
-                const off = o.hidden.includes(b.key);
-                eye.classList.toggle('fa-eye', !off); eye.classList.toggle('fa-eye-slash', off); eye.classList.toggle('etk-on', off);
-                eye.title = off ? '누르면 다시 보이기' : '누르면 숨기기';
-                pin.classList.toggle('etk-on', o.pins.includes(b.key));
-                row.classList.toggle('etk-off', off);
-            };
-            paint();
-            eye.addEventListener('click', () => { o.hidden = o.hidden.includes(b.key) ? o.hidden.filter(k => k !== b.key) : [...o.hidden, b.key]; a.save(); applyHidden(); paint(); });
-            pin.addEventListener('click', () => { o.pins = o.pins.includes(b.key) ? o.pins.filter(k => k !== b.key) : [...o.pins, b.key]; a.save(); placeAll(); render(); });
-            list.append(row);
+        const sections = sort === 'name'
+            ? [{ id: 'all', items: [...pinnedList, ...menuList].sort((x, y) => x.label.localeCompare(y.label, 'ko')) }]
+            : [{ id: 'pin', title: '메시지에 바로 표시', items: pinnedList }, { id: 'menu', title: '⋯ 메뉴', items: menuList.filter(b => !o.hidden.includes(b.key)) }, { id: 'hidden', title: '숨김', items: menuList.filter(b => o.hidden.includes(b.key)) }];
+        for (const sec of sections) {
+            if (sec.title) { const h = document.createElement('div'); h.className = 'etk-pin-sec'; h.dataset.sec = sec.id; h.innerHTML = `<span></span><small>${sec.items.length}</small>`; h.firstChild.textContent = sec.title; list.append(h); }
+            for (const b of sec.items) list.append(rowOf(b, sec.id, o));
         }
         list.scrollTop = keepTop;
+    };
+    const rowOf = (b, secId, o) => {
+        const row = document.createElement('div');
+        row.className = 'etk-pin-row'; row.dataset.key = b.key; row.dataset.sec = secId;
+        const canDrag = secId === 'pin' || secId === 'menu';
+        row.innerHTML = `<i class="${b.icon} etk-pin-icon"></i><span></span><div class="etk-pin-ctrls">${canDrag ? '<div class="etk-pin etk-move fa-solid fa-chevron-up interactable" tabindex="0" title="한 칸 위로"></div><div class="etk-pin etk-move fa-solid fa-chevron-down interactable" tabindex="0" title="한 칸 아래로"></div>' : ''}<div class="etk-pin etk-eye fa-solid interactable" tabindex="0"></div><div class="etk-pin etk-tack fa-solid fa-thumbtack interactable" tabindex="0" title="메시지에 바로 표시"></div></div>`;
+        row.querySelector('span').textContent = b.label;
+        const ic = row.querySelector('.etk-pin-icon');
+        if (b.mask) { ic.className = 'etk-pin-icon etk-pin-mask'; ic.style.webkitMaskImage = ic.style.maskImage = b.mask; }
+        else if (b.html && !b.icon) { ic.className = 'etk-pin-icon etk-pin-html'; ic.innerHTML = b.html; }   // 글꼴 아이콘이 없는 버튼(그림 · svg)은 그 그림을 그대로
+        const eye = row.querySelector('.etk-eye'), pin = row.querySelector('.etk-tack'), off = o.hidden.includes(b.key);
+        eye.classList.add(off ? 'fa-eye-slash' : 'fa-eye'); eye.classList.toggle('etk-on', off);
+        eye.title = off ? '누르면 다시 보이기' : '누르면 숨기기';
+        pin.classList.toggle('etk-on', o.pins.includes(b.key));
+        row.classList.toggle('etk-off', off);
+        eye.addEventListener('click', () => { o.hidden = off ? o.hidden.filter(k => k !== b.key) : [...o.hidden, b.key]; a.save(); applyHidden(); render(); });
+        pin.addEventListener('click', () => { o.pins = o.pins.includes(b.key) ? o.pins.filter(k => k !== b.key) : [...o.pins, b.key]; a.save(); placeAll(); render(); });
+        // 한 칸씩은 ↑↓ 버튼으로, 멀리 옮길 땐 줄을 끌어서(둘 다 됨)
+        const step = (d) => {
+            if (secId === 'pin') { const l = [...o.pins], i = l.indexOf(b.key), j = i + d; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; o.pins = l; placeAll(); }
+            else { const shown = [...row.parentElement.querySelectorAll('.etk-pin-row')].filter(r => r.dataset.sec === 'menu').map(r => r.dataset.key); const i = shown.indexOf(b.key), j = i + d; if (j < 0 || j >= shown.length) return; [shown[i], shown[j]] = [shown[j], shown[i]]; o.menuOrder = [...shown, ...o.menuOrder.filter(k => !shown.includes(k))]; applyHidden(); }
+            a.save(); render();
+        };
+        if (canDrag) { row.querySelector('.fa-chevron-up').addEventListener('click', () => step(-1)); row.querySelector('.fa-chevron-down').addEventListener('click', () => step(1)); }
+        if (canDrag) { row.classList.add('etk-pin-drag'); row.addEventListener('pointerdown', (e) => { if (!e.target.closest('.etk-pin') && e.button < 1) startDrag(e, row, o); }); }
+        return row;
+    };
+    // 끌기(월드인포 폴더와 같은 방식): 줄 아무 데나 잡고 — 마우스는 누른 채 조금 움직이면, 손가락은 0.35초 눌렀다가 — 끌면 줄이 목록 안에서 따라 움직이고,
+    // 놓으면 칸(바로 표시 · 메뉴)마다 순서를 읽어 저장. 숨김 칸으로는 못 들어감. 손잡이(⠿)를 따로 두니 거기만 잡혀서 줄을 꾹 잡아 끌면 안 됐음
+    const startDrag = (e, row, o) => {
+        const list = row.parentElement, sx = e.clientX, sy = e.clientY, touch = e.pointerType !== 'mouse';
+        let started = false, timer = 0, raf = 0, lastY = sy;
+        const begin = () => {
+            started = true;
+            try { row.setPointerCapture(e.pointerId); } catch { /* 이미 뗌 */ }
+            row.classList.add('etk-dragging');
+            navigator.vibrate?.(10);
+        };
+        const noScroll = (te) => { if (started) te.preventDefault(); };
+        const move = (ev) => {
+            if (!started) {
+                const d = Math.hypot(ev.clientX - sx, ev.clientY - sy);
+                if (touch) { if (d > 8) quit(); return; }
+                if (d < 6) return;
+                begin();
+            }
+            ev.preventDefault();
+            const y = lastY = ev.clientY, lr = list.getBoundingClientRect();
+            if (y < lr.top + 24) list.scrollTop -= 8; else if (y > lr.bottom - 24) list.scrollTop += 8;   // 가장자리에서 목록이 따라 굴러감
+            if (raf) return;
+            raf = requestAnimationFrame(() => { raf = 0; place(lastY); follow(lastY); });
+        };
+        // 잡은 줄은 손가락 · 마우스를 그대로 따라오게(자리만 바꾸면 줄이 다른 줄 가운데를 넘을 때마다 한 칸씩 뛰어 뚝뚝 끊겨 보였음)
+        const grabDy = sy - (row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2);
+        const follow = (y) => { const lr = list.getBoundingClientRect(); const natural = lr.top - list.scrollTop + row.offsetTop - list.offsetTop * 0 + row.offsetHeight / 2; row.style.transform = `translateY(${Math.round(y - grabDy - natural)}px)`; };
+        const place = (y) => {
+            {
+                const items = [...list.children].filter(c => c !== row);
+                const hiddenHead = list.querySelector('.etk-pin-sec[data-sec="hidden"]');
+                let before = items.find(c => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2; }) || null;
+                if (before?.classList.contains('etk-pin-sec') && before.dataset.sec === 'pin') before = before.nextElementSibling === row ? row.nextElementSibling : before.nextElementSibling;   // 맨 위 칸 제목 위로는 못 감
+                if (hiddenHead && (!before || before.compareDocumentPosition(hiddenHead) & Node.DOCUMENT_POSITION_PRECEDING)) before = hiddenHead;   // 숨김 칸 안으로는 못 감
+                if (before !== row && row.nextElementSibling !== before) list.insertBefore(row, before);
+            }
+        };
+        // 신호는 문서에서 받음: 끄는 줄을 목록 안에서 옮기면(insertBefore) 브라우저가 그 줄의 포인터 붙잡기를 풀어서, 줄 밖으로 나가는 순간 움직임 · 놓기가 안 와
+        // 끌기가 중간에 멈추고 놓은 것도 못 받아 끄는 모양이 그대로 남았음
+        const quit = () => { clearTimeout(timer); document.removeEventListener('pointermove', move, true); document.removeEventListener('pointerup', end, true); document.removeEventListener('pointercancel', end, true); document.removeEventListener('touchmove', noScroll, true); window.removeEventListener('blur', end); };
+        const end = () => {
+            quit();
+            if (!started) return;
+            if (!row.isConnected) return;   // 끄는 중에 설정 창이 닫혀 목록이 사라짐
+            cancelAnimationFrame(raf); raf = 0; place(lastY); row.style.transform = '';   // 마지막 자리는 놓을 때 한 번 더(화면 그리기가 늦으면 마지막 움직임이 빠졌음)
+            row.classList.remove('etk-dragging');
+            let sec = 'pin';
+            const pins = [], menu = [];
+            for (const c of list.children) {
+                if (c.classList.contains('etk-pin-sec')) { sec = c.dataset.sec; continue; }
+                if (sec === 'pin') pins.push(c.dataset.key); else if (sec === 'menu') menu.push(c.dataset.key);
+            }
+            const hiddenKeys = o.menuOrder.filter(k => o.hidden.includes(k) && !pins.includes(k));
+            const pinsChanged = pins.join('|') !== o.pins.join('|'), secOld = row.dataset.sec, secNew = pins.includes(row.dataset.key) ? 'pin' : 'menu';
+            o.pins = pins;
+            o.menuOrder = [...menu, ...hiddenKeys, ...o.menuOrder.filter(k => !menu.includes(k) && !hiddenKeys.includes(k) && !pins.includes(k))];
+            a.save(); applyHidden();
+            // 놓을 때 하던 일(모든 메시지에 꺼낸 버튼 다시 붙이기 · 채팅 속 버튼을 전부 다시 모아 목록 새로 그리기)이 119ms 걸렸음 →
+            // 꺼낸 버튼이 바뀐 때만 다시 붙이고, 목록은 줄이 이미 제자리라 칸이 바뀐 때만 새로 그림(칸 제목의 개수 · 고정 표시가 바뀌어서)
+            if (pinsChanged) placeAll();
+            if (secOld !== secNew) render();
+        };
+        if (touch) { timer = setTimeout(begin, 350); document.addEventListener('touchmove', noScroll, { passive: false, capture: true }); }
+        else e.preventDefault();   // 마우스로 끌 때 글자가 골라지지 않게
+        document.addEventListener('pointermove', move, true); document.addEventListener('pointerup', end, true); document.addEventListener('pointercancel', end, true); window.addEventListener('blur', end);
     };
     render();
     // 버튼을 붙이는 기능을 켜고 끄면 목록도 바로 바꿈(설정 창을 열어 둔 채 켜고 끄면 지운 버튼이 목록에 남아 있었음)

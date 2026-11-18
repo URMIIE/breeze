@@ -1,3 +1,4 @@
+import { styledBy, fromSheet, theme } from '../lib/who.js';
 // 채팅 파일 관리 창 가볍게.
 // 채팅 파일이 많은 캐릭터는 관리 창의 줄이 수백 개라 굴릴 때 버벅이고, 창을 닫은 뒤에도 그 줄들이 화면 뒤에 남아 페이지를 무겁게 한다.
 // ① 화면 밖 줄은 브라우저가 그리기를 건너뛰게 하고(content-visibility — 채팅 줄과 그 창의 백업 목록 줄), ② 창을 닫으면 목록을 비운다(다시 열면 실리태번이 새로 채움).
@@ -26,7 +27,7 @@ export function start(a) {
             const row = list.querySelector('.select_chat_block_wrapper');
             const mine = !!row && getComputedStyle(row).contentVisibility === 'visible';
             list.classList.toggle('etk-light', mine);
-            if (row) api?.rest(mine ? null : 'same');
+            if (row && mine) api?.rest(null); else if (row) api?.rest('same', { saw: "채팅 줄에 '화면 밖은 안 그리기'(content-visibility)가 이미 걸려 있어요", who: styledBy(row, 'content-visibility', v => !!v && v !== 'visible'), back: '그쪽을 끄면 다음에 관리 창을 열 때 breeze가 맡아요.' });
         }
         had = !!first;
     });

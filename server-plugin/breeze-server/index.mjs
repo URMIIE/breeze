@@ -6,7 +6,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { CLIENT_PATCHES } from './client-patches.mjs';
 
 export const info = {
@@ -18,6 +18,61 @@ export const info = {
 const HERE = path.dirname(new URL(import.meta.url).pathname);
 const ROOT = process.cwd();
 const TAG = '[breeze]';
+// 플러그인 버전: breeze 확장 버전(manifest.json)과 같게 둠(둘이 다른 이름을 쓰면 헷갈려서). 배포할 때 manifest 버전과 함께 올림
+const PLUGIN_VERSION = '1.2.0';
+const verNum = (v) => (typeof v === 'number' ? v : String(v || '').split('.').slice(0, 3).reduce((a, n) => a * 1000 + (Number(n) || 0), 0));
+const PLUGIN_FILES = ['index.mjs', 'client-patches.mjs', 'package.json'];
+let updatedTo = 0;
+
+// 업데이트: 확장을 업데이트해도 실리태번 plugins 폴더의 이 사본은 그대로라, 새 기능을 쓰려면 사람이 다시 복사해야 했음.
+// 확장 폴더들 안의 server-plugin/breeze-server 중 버전이 가장 높은 것을 찾아 이 폴더를 덮어씀(지금 도는 코드는 그대로, 서버를 다시 켜면 새 판).
+// 버전이 같거나 낮으면 손대지 않음(사용자 폴더가 여럿이고 옛 확장이 남아 있어도 내려가지 않게). 설정(config.json) · 아이콘은 건드리지 않음.
+// 설정 창의 '지금 업데이트'(POST /update) 또는 '자동 업데이트'(config.json autoUpdate)
+function versionOf(file) {
+    // 예전 꼴(숫자 3 · 4)도 읽음: 숫자는 버전 꼴(1.2.0)보다 늘 낮게 견줘짐
+    try { const m = fs.readFileSync(file, 'utf8').match(/const PLUGIN_VERSION = (?:'([\d.]+)'|(\d+));/); return m ? (m[1] || Number(m[2])) : 0; } catch { return 0; }
+}
+function pluginCopies() {
+    const roots = [];
+    const dataRoot = globalThis.DATA_ROOT || path.join(ROOT, 'data');
+    try { for (const u of fs.readdirSync(dataRoot, { withFileTypes: true })) if (u.isDirectory() && !u.name.startsWith('_')) roots.push(path.join(dataRoot, u.name, 'extensions')); } catch { /* 자료 폴더 못 읽음 */ }
+    roots.push(path.join(ROOT, 'public', 'scripts', 'extensions', 'third-party'));
+    const out = [];
+    for (const r of roots) {
+        let names;
+        try { names = fs.readdirSync(r); } catch { continue; }
+        for (const n of names) { const dir = path.join(r, n, 'server-plugin', 'breeze-server'); if (fs.existsSync(path.join(dir, 'index.mjs'))) out.push(dir); }
+    }
+    return out;
+}
+const hereDir = () => fs.realpathSync(path.dirname(fileURLToPath(import.meta.url)));
+function newestCopy() {
+    const here = hereDir();
+    let best = null, bestVersion = verNum(updatedTo) > verNum(PLUGIN_VERSION) ? updatedTo : PLUGIN_VERSION;
+    for (const dir of pluginCopies()) {
+        let real; try { real = fs.realpathSync(dir); } catch { continue; }
+        if (real === here) continue;
+        const v = versionOf(path.join(dir, 'index.mjs'));
+        if (verNum(v) > verNum(bestVersion)) { best = dir; bestVersion = v; }
+    }
+    return best ? { dir: best, version: bestVersion } : null;
+}
+function applyUpdate() {
+    const found = newestCopy();
+    if (!found) return 0;
+    const here = hereDir();
+    for (const f of PLUGIN_FILES) { const src = path.join(found.dir, f); if (fs.existsSync(src)) fs.copyFileSync(src, path.join(here, f)); }
+    updatedTo = found.version;
+    console.log(`${TAG} 서버 플러그인을 ${found.version} 버전으로 바꿔 두었어요. 실리태번 서버를 다시 켜면 적용돼요.`);
+    return found.version;
+}
+function readConfig() { try { return JSON.parse(fs.readFileSync(path.join(HERE, 'config.json'), 'utf8')) || {}; } catch { return {}; } }
+function writeConfig(json) { fs.writeFileSync(path.join(HERE, 'config.json'), `${JSON.stringify(json, null, 2)}\n`); }
+function updateInfo() {
+    let available = 0;
+    try { available = newestCopy()?.version || 0; } catch { /* 못 찾음 */ }
+    return { plugin: PLUGIN_VERSION, updated: updatedTo, available, autoUpdate: readConfig().autoUpdate === true };
+}
 const FEATURES = ['lazy_load', 'folder_cache', 'chat_cache', 'no_local_compression', 'regex_hook', 'tab_icon', 'loading_screen'];
 /** 기능 → 'on' | 'off' | 'mismatch: 까닭' */
 const status = {};
@@ -237,7 +292,30 @@ function lastMessage(file) {
     } catch { return null; } finally { if (fd !== undefined) fs.closeSync(fd); }
 }
 
-function addPreviewFields(items, fileOf) {
+// 파일 앞 조각만 읽어 첫 메시지(머리 줄 다음 줄)를 얻음. 채팅 이름의 날짜는 분기 채팅이면 원래 채팅 것이라 시작 날짜로 못 씀
+function firstMessage(file) {
+    let fd;
+    try {
+        fd = fs.openSync(file, 'r');
+        const size = fs.fstatSync(fd).size;
+        let want = 64 * 1024;
+        while (true) {
+            const len = Math.min(size, want);
+            const buf = Buffer.alloc(len);
+            fs.readSync(fd, buf, 0, len, 0);
+            const lines = buf.toString('utf8').split('\n');
+            if (lines.length > 2 || len === size) {
+                for (const l of lines.slice(1, len === size ? undefined : -1)) { try { const m = JSON.parse(l); if (m && typeof m.mes === 'string') return m; } catch { /* 깨진 줄 */ } }
+                return null;
+            }
+            if (want >= 64 * 1024 * 1024) return null;
+            want *= 4;
+        }
+    } catch { return null; } finally { if (fd !== undefined) fs.closeSync(fd); }
+}
+
+const PREVIEW_CUT = 1500;
+function addPreviewFields(items, fileOf, withSource = false) {
     for (const item of items) {
         if (!item || typeof item !== 'object' || !item.file_name || 'display_mes' in item) continue;
         const file = fileOf(item);
@@ -246,10 +324,27 @@ function addPreviewFields(items, fileOf) {
         item.display_mes = typeof last.extra?.display_text === 'string' ? last.extra.display_text : '';
         item.mes_is_user = !!last.is_user;
         item.mes_preset = typeof last.extra?.regex_preset === 'string' ? last.extra.regex_preset : '';
+        // 채팅 파일 관리 창(찾기): 마지막 글을 통째로 보내면 채팅 수십 개에 응답이 MB 단위로 커지고 화면 쪽에서 글마다 정규식을 돌려 창이 늦게 떴음
+        // → 화면에 보일 글(번역문 먼저)의 앞 · 뒤 조각만. 앞은 줄의 마지막 글 두 줄, 뒤는 미리보기(끝 400자)에 씀
+        if (withSource) {
+            const src = item.display_mes || (typeof last.mes === 'string' ? last.mes : '');
+            item.preview_head = src.slice(0, PREVIEW_CUT);
+            item.preview_tail = src.length > PREVIEW_CUT ? src.slice(-PREVIEW_CUT) : src;
+            // 답이 앞 조각보다 긴 태그 덩어리(생각 글 등)로 시작하면 앞 조각이 통째로 그 덩어리라 화면에서 숨겨져 빈 줄이 됨
+            // → 그 덩어리가 닫힌 뒤부터 한 조각 더(숨길지는 화면 쪽 정규식이 정함: 본문이 태그로 감싸인 답도 있어 여기서 지우지 않음)
+            const open = /^\s*<([A-Za-z][\w-]*)[^>]*>/.exec(src);
+            if (open) {
+                const close = src.toLowerCase().indexOf(`</${open[1].toLowerCase()}>`, open[0].length);
+                const end = close < 0 ? -1 : close + open[1].length + 3;
+                if (end > PREVIEW_CUT) item.preview_after = src.slice(end).trimStart().slice(0, PREVIEW_CUT);
+            }
+            item.display_mes = '';
+        }
+        if (withSource) { const first = firstMessage(file); if (first?.send_date) item.first_date = first.send_date; }   // 찾기 응답의 미리보기는 끝 400자로 잘려 있어 통째로 한 번 더
     }
 }
 
-function cachedList(key, stampOf, fileOf) {
+function cachedList(key, stampOf, fileOf, withSource = false) {
     return (request, response, next) => {
         let memoKey, stamp;
         try {
@@ -264,7 +359,7 @@ function cachedList(key, stampOf, fileOf) {
             response.send = send;
             try {
                 if (Array.isArray(value) && response.statusCode === 200) {
-                    addPreviewFields(value, (item) => fileOf(request, item));
+                    addPreviewFields(value, (item) => fileOf(request, item), withSource);
                     const json = JSON.stringify(value);
                     if (chatMemo.size > 400) chatMemo.clear();
                     chatMemo.set(memoKey, { stamp, json });
@@ -301,6 +396,15 @@ async function setupChats() {
         if (!request.body?.avatar_url) throw new Error('no avatar');
         return folderStamp(charDir(request, request.body.avatar_url), '.jsonl');
     }, (request, item) => path.join(charDir(request, request.body.avatar_url), item.file_name))));
+    // 채팅 파일 관리 창(찾기): 그 캐릭터 폴더 또는 그룹 채팅 폴더. 항목의 file_name 은 확장자 없는 이름
+    if (has(chatsRouter, '/search')) putFirst(chatsRouter, makeLayer('post', '/search', cachedList('search', (request) => {
+        const d = request.user.directories;
+        if (request.body?.group_id) return folderStamp(d.groupChats, '.jsonl') + folderStamp(d.groups, '.json');
+        if (!request.body?.avatar_url) throw new Error('no avatar');
+        return folderStamp(charDir(request, request.body.avatar_url), '.jsonl');
+    }, (request, item) => (request.body?.group_id
+        ? path.join(request.user.directories.groupChats, `${item.file_name}.jsonl`)
+        : path.join(charDir(request, request.body.avatar_url), `${item.file_name}.jsonl`)), true)));
 }
 
 // ───────── 앱 전체에 걸치는 것: 압축 · 브라우저로 가는 파일 ─────────
@@ -420,6 +524,7 @@ function setupApp(app) {
 
 export async function init(router) {
     scratch = router;
+    if (readConfig().autoUpdate === true) { try { applyUpdate(); } catch (e) { console.warn(`${TAG} 플러그인 자동 업데이트 실패 — ${e.message}`); } }
     for (const f of FEATURES) status[f] = 'off';
     try { await setupSettings(); } catch (e) { console.warn(`${TAG} 설정 묶음 준비 실패 — ${e.message}`); }
     try { await setupChats(); } catch (e) { console.warn(`${TAG} 채팅 목록 준비 실패 — ${e.message}`); }
@@ -452,10 +557,84 @@ export async function init(router) {
         } catch (e) { response.status(500).send({ error: e.message }); }
     });
 
+    // 채팅 파일 관리 창의 펼쳐 보기: 채팅을 통째로 보내지 않고 처음 두 마디 · 끝 두 마디만(큰 채팅은 수십 MB 라 통째로 받아 읽으면 화면이 멈췄음).
+    // 앞은 파일 처음부터 줄 셋(머리 줄 + 두 마디)까지만, 끝은 파일 끝 조각만 읽음. 작은 파일은 통째로(all)
+    router.post('/chat-peek', (request, response) => {
+        try {
+            const d = request.user.directories;
+            const name = path.basename(String(request.body?.file || ''));
+            if (!name || name.includes('..')) return response.sendStatus(400);
+            const file = request.body?.group
+                ? path.join(d.groupChats, `${name}.jsonl`)
+                : path.join(d.chats, path.basename(String(request.body?.avatar_url || '')).replace(/\.png$/i, ''), `${name}.jsonl`);
+            if (!file.startsWith(d.chats) && !file.startsWith(d.groupChats)) return response.sendStatus(400);
+            const st = fs.statSync(file, { throwIfNoEntry: false });
+            if (!st) return response.sendStatus(404);
+            const parse = (lines) => lines.map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(x => x && typeof x === 'object');
+            // 마지막 글 하나만(채팅 목록 미리보기가 비었을 때): 스와이프 기록까지 보내면 한 번에 MB 단위라 보일 글만
+            if (request.body?.lastOnly) {
+                const m = lastMessage(file);
+                if (!m || typeof m.mes !== 'string') return response.send({ last: null });
+                const shown = typeof m.extra?.display_text === 'string' && m.extra.display_text ? m.extra.display_text : m.mes;
+                return response.send({ last: { text: shown, is_user: !!m.is_user, preset: typeof m.extra?.regex_preset === 'string' ? m.extra.regex_preset : '' } });
+            }
+            if (st.size <= 512 * 1024) return response.send({ all: parse(fs.readFileSync(file, 'utf8').split('\n').filter(Boolean)) });
+            const fd = fs.openSync(file, 'r');
+            try {
+                const read = (pos, len) => { const buf = Buffer.alloc(len); const n = fs.readSync(fd, buf, 0, len, pos); return buf.subarray(0, n).toString('utf8'); };
+                let headText = '', want = 64 * 1024;
+                while (true) { headText = read(0, Math.min(want, st.size)); if (headText.split('\n').length > 3 || want >= st.size) break; want *= 4; }
+                let tailText = '', back = 64 * 1024;
+                while (true) { const len = Math.min(back, st.size); tailText = read(st.size - len, len); if (tailText.trimEnd().split('\n').length > 2 || len === st.size) break; back *= 4; }
+                const head = parse(headText.split('\n').slice(0, 3));
+                const tail = parse(tailText.trimEnd().split('\n').slice(-2));
+                response.send({ head, tail });
+            } finally { fs.closeSync(fd); }
+        } catch (e) { response.status(500).send({ error: e.message }); }
+    });
+
     // breeze이 상태를 물어보는 주소. 여기까지 온 첫 요청으로도 앱을 찾음
     // wanted = config.json 에 적힌 켜짐(다음에 서버를 켤 때 쓸 값). 지금 상태(features)와 다르면 서버를 다시 켜야 바뀜
     const wantedAll = () => Object.fromEntries(FEATURES.map(f => [f, wanted(f)]));
-    router.get('/status', (req, res) => { withApp(req.app); res.send({ version: 2, features: status, wanted: wantedAll() }); });
+    router.get('/status', (req, res) => { withApp(req.app); res.send({ version: 2, ...updateInfo(), features: status, wanted: wantedAll() }); });
+    // 월드인포 폴더 화면: 월드인포마다 항목 수 · 켜진 수 · 상시 수 · 수정 시각(화면 쪽이 토큰 수를 다시 셀지 정함).
+    // 화면 쪽에서 월드인포를 하나씩 다 받아 세면 월드인포가 많을 때 열 때마다 수십 번 요청 → 서버가 파일을 읽어 한 번에(파일이 그대로면 지난번 값)
+    const wiMemo = new Map();
+    router.get('/worldinfo-summary', (request, response) => {
+        try {
+            const dir = request.user.directories.worlds;
+            const out = {};
+            for (const f of fs.readdirSync(dir)) {
+                if (path.extname(f).toLowerCase() !== '.json') continue;
+                const file = path.join(dir, f);
+                const st = fs.statSync(file, { throwIfNoEntry: false });
+                if (!st) continue;
+                const key = `${file}|${st.mtimeMs}|${st.size}`;
+                let row = wiMemo.get(file);
+                if (!row || row.key !== key) {
+                    let entries = 0, enabled = 0, constant = 0;
+                    try {
+                        const list = Object.values(JSON.parse(fs.readFileSync(file, 'utf8'))?.entries || {});
+                        entries = list.length;
+                        for (const e of list) { if (!e?.disable) enabled++; if (e?.constant) constant++; }
+                    } catch { /* 깨진 파일 */ }
+                    row = { key, data: { entries, enabled, constant, mtime: st.mtimeMs } };
+                    wiMemo.set(file, row);
+                }
+                out[path.basename(f, path.extname(f))] = row.data;
+            }
+            response.send(out);
+        } catch (e) { response.status(500).send({ error: e.message }); }
+    });
+
+    // 설정 창: 지금 업데이트 · 자동 업데이트 켜고 끄기
+    router.post('/update', (req, res) => {
+        try {
+            if (typeof req.body?.auto === 'boolean') { const json = readConfig(); json.autoUpdate = req.body.auto; writeConfig(json); }
+            if (req.body?.apply === true) applyUpdate();
+            res.send(updateInfo());
+        } catch (e) { res.status(500).send({ error: e.message }); }
+    });
     // 기능 켜고 끄기: config.json 에 적어 둠. 기능은 서버가 켜질 때 한 번 끼우므로 서버를 다시 켜야 바뀜
     router.post('/features', (req, res) => {
         try {

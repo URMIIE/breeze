@@ -544,9 +544,12 @@ function looseRenders(text, baseList, baseNameValue, depth, taken) {
 
     // 기준 목록이 아는 자리는 깊이 · 화면/보내기 상관없이 그쪽 몫 — 일부러 최근 몇 개에만 그리는 카드 정규식이
     // 오래된 답에서 쉬는 걸 다른 프리셋이 대신 그리지 않게
+    // 전역 정규식은 안 봄: 지금 전역 정규식(줄 앞 공백 빼기처럼 블록 안 몇 글자만 고치는 것까지)이 그 자리를 가져가
+    // 예전 답의 프리셋 꾸밈이 빠졌음. 지금 정규식이 그때 그린 모양을 정하면 안 됨
+    const globalIds = new Set((extension_settings.regex ?? []).map(s => s?.id).filter(Boolean));
     const covered = [...taken];
     for (const s of baseList ?? []) {
-        if (!s || s.disabled || !s.findRegex || !Array.isArray(s.placement) || !s.placement.includes(AI_OUTPUT) || !mayMatch(s, text, lower)) continue;
+        if (!s || globalIds.has(s.id) || s.disabled || !s.findRegex || !Array.isArray(s.placement) || !s.placement.includes(AI_OUTPUT) || !mayMatch(s, text, lower)) continue;
         covered.push(...rangesOf(s, text));
     }
     const size = text.replace(/\s+/g, '').length;
@@ -816,6 +819,7 @@ export function start(api) {
     loadPresetRegex();
     onPresetRegexLoaded(() => { signIndex = null; metaIndex = null; renderCache.clear(); looseCache.clear(); guessCache = new Map(); });
     already = !!globalThis[Symbol.for('preset-regex-keep')];
+    if (already) api.rest('same', { saw: '같은 기능이 먼저 돌고 있다는 표시(preset-regex-keep)가 있어요', who: { kind: 'unknown' }, back: '그쪽을 끄고 새로고침하면 breeze가 맡아요.' });
 if (!already && typeof engine.setRegexScriptsProvider !== 'function') {
     console.info('[Breeze] 본체에 정규식 연결 지점이 없어 만든 프리셋 정규식으로 그리기는 쉬어요(기록만 해요). 짝 서버 플러그인을 넣으면 켜져요');
 }

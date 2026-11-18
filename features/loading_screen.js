@@ -1,3 +1,4 @@
+import { styledBy, fromSheet, theme } from '../lib/who.js';
 // 로딩 화면 바꾸기 — 실리태번을 켤 때 뜨는 로딩 화면의 배경색 · 배경 그림 · 로고 · 문구를 바꾼다.
 // 로딩 화면은 확장이 불러와지기 전에 지나가므로 확장 코드로는 못 바꾼다. 그래서 고른 내용을 CSS 로 만들어 사용자 파일
 // (user/files/breeze-splash.css)로 저장해 두고, 실리태번이 가장 먼저 읽는 사용자 CSS(css/user.css)가 그 파일을 읽게 한다.
@@ -94,7 +95,7 @@ ${ON} #loader.splash-screen::after{content:"STEPS " counter(etk-steps)!important
     plain: { name: '실리태번 기본', note: '바꾸지 않은 원래 화면', css: '' },
 };
 const DEFAULT_LOOK = LOOKS.cat.css;
-let off = null, otherSplash = false, themeSplash = false, ignoreTheme = false;
+let off = null, otherSplash = false, themeSplash = false, ignoreTheme = false, otherSheet = null;
 // 내 로딩 화면을 쓰는 테마 이름 목록(테마마다 정함)
 const ownHere = (o) => (o?.ownThemes || []).includes(appliedTheme());
 // 테마(또는 다른 확장)에 로딩 화면이 있으면 쉼 — ‘테마 로딩 화면 무시’를 켜면 늘 이 화면
@@ -103,7 +104,10 @@ const applyThemeClassNow = () => {
     const resting = !ignoreTheme && (themeSplash || otherSplash);
     document.documentElement.classList.toggle('etk-theme-splash', resting);
     muteThemeSplash();
-    apiRef?.rest?.(resting ? "same" : null);
+    const back = "세부 설정의 '지금 테마에서 내가 고른 로딩 화면 쓰기'를 켜면 breeze 화면을 써요.";
+    apiRef?.rest?.(resting ? 'same' : null, themeSplash
+        ? { saw: '테마 CSS에 로딩 화면이 들어 있어요', who: theme(), back }
+        : { saw: '다른 스타일시트에 로딩 화면 규칙(#preloader)이 있어요', who: otherSheet ? fromSheet(otherSheet) : { kind: 'unknown' }, back });
 };
 
 // 내 로딩 화면을 쓰기로 했으면 테마 CSS 의 로딩 화면 규칙을 끔: 안 끄면 테마가 문구 자리를 옮기고 그 뒤 장식(::after)을 글자로 바꿔
@@ -258,7 +262,7 @@ function findOtherSplash(staticOnly = false) {
             for (const r of list) {
                 if (r.styleSheet) { if (scan(r.styleSheet, depth + 1)) return true; continue; }
                 if (r.cssRules && !r.selectorText && walk(r.cssRules)) return true;   // @media · @supports 안
-                if (r.selectorText && r.selectorText.includes('#preloader') && sheet.ownerNode?.id !== 'custom-style') return true;
+                if (r.selectorText && r.selectorText.includes('#preloader') && sheet.ownerNode?.id !== 'custom-style') { otherSheet = sheet; return true; }
             }
             return false;
         };

@@ -61,7 +61,10 @@ const devCount = (x) => Object.values(x.dev || { a: Object.getOwnPropertyDescrip
 // 화면 값(채팅 폭 · 패널 폭): 기본은 이 테마에만(scr). 테마마다 CSS 가 달라 '모든 테마' 기본은 다른 테마를 어긋나게 했음 →
 // 사용자가 고른 테마들끼리만 같은 값을 함께 씀(share[기기][키] = { themes, v }). 예전 '모든 테마' 값(screen)은 읽기만
 const shareOf = (k) => { const g = opts().share[dev()][k]; return g && g.themes?.includes(themeName()) ? g : null; };
+// 고친 항목 목록에서 잠시 꺼 둔 '테마 전체' 값(값은 두고 안 씀): 'scr:chat' · 'avatar' · 'noFont' · 'mg' · 'av' · 'd'
+const isOff = (k, t = themeOpt()) => !!t.offs?.includes(k);
 function screenVal(k) {
+    if (isOff(`scr:${k}`)) return 0;
     const own = themeOpt().scr?.[dev()];
     if (own && k in own) return Number(own[k]) || 0;
     const g = shareOf(k);
@@ -69,6 +72,7 @@ function screenVal(k) {
     return Number(opts().screen[dev()][k]) || 0;
 }
 function setScreen(k, v) {
+    { const t0 = themeOpt(); if (t0.offs?.includes(`scr:${k}`)) t0.offs = t0.offs.filter(x => x !== `scr:${k}`); }   // 꺼 둔 값을 새로 바꾸면 다시 켬
     const g = shareOf(k), own = themeOpt().scr?.[dev()];
     if (g && !(own && k in own)) { g.v = v; return; }
     const t = themeOpt(true);
@@ -125,6 +129,7 @@ function tidyTheme(n) {
     if (v.styles) v.styles = v.styles.filter(x => { if (x.dev) for (const k of Object.keys(x.dev)) if (!Object.keys(x.dev[k] || {}).length) delete x.dev[k]; return devCount(x) > 0; });
     if (!v.styles?.length) delete v.styles;
     if (v.area) { for (const k of Object.keys(v.area)) if (v.area[k] == null) delete v.area[k]; if (v.area.d == null) { delete v.area.rowH; delete v.area.pad0; } if (v.area.avD) { for (const k of Object.keys(v.area.avD)) if (!v.area.avD[k]?.av) delete v.area.avD[k]; if (!Object.keys(v.area.avD).length) delete v.area.avD; } else if (!v.area.av) { delete v.area.avCss; delete v.area.avW0; } if (v.area.mg == null) { delete v.area.mgX; delete v.area.mgV0; } if (!Object.keys(v.area).length) delete v.area; }
+    if (v.offs) { v.offs = v.offs.filter(k => k.startsWith('scr:') ? ((q) => Object.values(v.scr || {}).some(o => q in o) || Object.values(opts().share || {}).some(d => d?.[q]?.themes?.includes(n)) || Object.values(opts().screen || {}).some(d => d?.[q]))(k.slice(4)) : k === 'avatar' ? v.avatar > 0 : k === 'noFont' ? !!v.noFont : v.area?.[k] != null); if (!v.offs.length) delete v.offs; }
     if (!v.scr && !v.noFont && !v.font && !(v.avatar > 0) && !v.fixes && !v.styles && !v.area) delete t[n];
 }
 
@@ -192,14 +197,20 @@ function build() {
     const t = themeOpt(), out = [], v = (k) => screenVal(k);
     // 다른 확장 · 테마가 같은 곳을 !important 로 더 강하게 고정해 둔 경우(양옆 패널 최소 폭 등) 우리 값이 안 먹었음 → 아이디 셋만큼 강하게
     const S = 'html:not(#etk-tf-a):not(#etk-tf-b):not(#etk-tf-c) body';
-    // 실리태번은 채팅 폭을 <html> 의 style 에 넣는데, 스타일시트의 !important 가 그보다 앞섬
-    if (v('chat') > 0) out.push(`:root:not(#etk-tf-a) { --sheldWidth: ${v('chat')}vw !important; }`);
+    // 실리태번 채팅 폭 값(--sheldWidth)은 채팅 칸에만: 페이지 전체에 걸면 그 값으로 '채팅 옆 남은 자리'를 재는 테마에서 설정 패널까지 같이 좁아졌음
+    // (채팅 칸 안에서는 실리태번 · 테마 규칙이 이 값으로 폭 · 가운데 자리를 계산함)
+    if (v('chat') > 0) out.push(`${S} #sheld { --sheldWidth: ${v('chat')}vw !important; }`);
+    // 실리태번 채팅 폭 값을 테마가 상한으로만 쓰는 경우(예: min(채팅 폭, 화면 - 그림 자리)) 값을 키워도 더 안 넓어졌음 → 채팅 칸 폭도 직접(위치는 테마대로라 오른쪽에 붙은 테마는 왼쪽으로 넓어짐)
+    if (v('chat') > 0) out.push(`${S} #sheld { width: min(${v('chat')}vw, 100vw) !important; max-width: 100vw !important; }`);
+    // 채팅 칸을 넓혀도 안쪽 칸의 최대 폭(테마 96개 중 메시지 16 · 글 칸 29개가 둠)에 막혀 글은 그대로였음 → 채팅 폭을 정했으면 안쪽 최대 폭도 풂
+    // (메시지 안 여백 · 이름 칸은 테마 모양이라 그대로 두고, 그건 '메시지 왼쪽 빈자리'로 따로)
+    if (v('chat') > 0) out.push(`${S} :is(#chat, #chat .mes, #chat .mes .mes_block, #chat .mes .mes_text) { max-width: none !important; }`);
     // 글자 크기: 실리태번 글자 배율(--fontScale)은 글자를 px 로 박아 둔 테마에선 아이콘만 커져서, 메시지 글 칸 자체를 확대 · 축소
     if (v('font') > 0) out.push(`${S} #chat .mes :is(.mes_text, .mes_reasoning_details) { zoom: ${v('font')} !important; }`);
     if (v('panel') > 0) out.push(`${S} #top-settings-holder .drawer-content:not(.fillLeft):not(.fillRight):not(#left-nav-panel):not(#right-nav-panel) { min-width: min(${v('panel')}px, calc(100vw - 16px)) !important; left: 50% !important; right: auto !important; transform: translateX(-50%) !important; }`);
     if (v('side') > 0) out.push(`${S} :is(#left-nav-panel, #right-nav-panel) { min-width: min(${v('side')}px, calc(100vw - 16px)) !important; width: min(${v('side')}px, calc(100vw - 16px)) !important; }`);
-    themeFontOff(!!t.noFont);
-    if (t.avatar > 0) out.push(`${S} #chat .mes .avatar { max-width: ${t.avatar}px !important; height: auto !important; }
+    themeFontOff(!!t.noFont && !isOff('noFont', t));
+    if (t.avatar > 0 && !isOff('avatar', t)) out.push(`${S} #chat .mes .avatar { max-width: ${t.avatar}px !important; height: auto !important; }
 ${S} #chat .mes .avatar img { max-width: ${t.avatar}px !important; max-height: ${Math.round(t.avatar * 1.5)}px !important; width: auto !important; height: auto !important; }`);
     out.push(...areaCss(S, t));
     if (t.area?.mg != null && t.area.mgX?.[dev()] == null && !gapBusy && !gapNoMes) requestAnimationFrame(() => fitGap(t.area.mg, true));
@@ -231,10 +242,10 @@ const listPad = (a, k) => { const p0 = a.pad0?.[k]; if (a.d == null) return null
 const TIGHT = 3, LOOSE = 6;   // 빽빽하게: 프롬프트 줄 여백 3px, 널찍하게: 원래 + 6px
 function areaCss(S, t) {
     const a = t.area || {}, out = [];
-    if (a.av && a.avCss) out.push(a.avCss);
-    const gx = a.mg != null ? a.mgX?.[dev()] : null;
+    if (a.av && a.avCss && !isOff('av', t)) out.push(a.avCss);
+    const gx = a.mg != null && !isOff('mg', t) ? a.mgX?.[dev()] : null;
     if (gx != null) out.push(`${S} #chat .mes { margin-bottom: ${gx}px !important; }`);
-    if (a.d == null) return out;
+    if (a.d == null || isOff('d', t)) return out;
     for (const [k, sel] of Object.entries(LIST_ROWS)) {
         const pad = listPad(a, k);
         if (pad == null) continue;
@@ -454,7 +465,8 @@ function mainProps(el, cs, img) {
 function styleCss(S, x) {
     const p = x.props || {}, d = [];
     // 'auto' = 테마가 고정해 둔 크기(폭 0 · 높이 150px 등)를 풀어 내용에 맞춤
-    if (p.width != null) d.push(`width: ${p.width === 'auto' ? 'auto' : `${p.width}px`}`, 'max-width: none', 'min-width: 0', ...(x.img ? ['height: auto'] : []));
+    // 나란히 놓인 칸(flex) 안에서 남은 자리를 채우게 된 칸(입력창 글 칸 등)은 폭을 정해도 그대로 늘어나서, 폭을 정하면 늘고 줄지 않게
+    if (p.width != null) d.push(`width: ${p.width === 'auto' ? 'auto' : `${p.width}px`}`, 'max-width: none', 'min-width: 0', ...(p.width !== 'auto' ? ['flex: 0 0 auto'] : []), ...(x.img ? ['height: auto'] : []));
     if (p.height != null) d.push(`height: ${p.height === 'auto' ? 'auto' : `${p.height}px`}`, 'min-height: 0', 'max-height: none');
     else if (p.minH != null) d.push(`min-height: ${p.minH}px`);
     // 떠 있는 칸 제자리에: 테마가 위치를 고정해 띄운 칸(position absolute 등)을 다른 칸들 차례에 놓음 → 위에 무엇이 끼어들어도 밀려서 안 겹침
@@ -612,11 +624,12 @@ function outline(el) {
     const box = mode?.box;
     if (!box) return;
     if (!el || !el.isConnected) { box.classList.remove('etk-show'); return; }
-    const r = el.getBoundingClientRect();
+    const r = mode.previewRect || el.getBoundingClientRect();   // 큰 칸을 끄는 동안엔 놓을 자리만 그림
     // 열어 두고 가만히 있을 때 매 프레임 칸의 여백까지 다시 읽었음 → 자리 · 크기 · 상태가 그대로면 건너뜀(값을 바꾸면 refresh · live 가 _key 를 비움)
     const key = `${r.left},${r.top},${r.width},${r.height},${!!mode.picking},${!!mode.peek},${!!mode.card},${el === mode.el}`;
     if (box._el === el && box._key === key) return;
     box._key = key;
+    if (!mode.dragging) dodgeBar(el === mode.el && !mode.picking ? r : null);
     // 읽기를 먼저 다 하고 쓰기를 한 번에: 규칙을 바꾼 뒤 칸의 여백을 읽으면 그때마다 스타일을 다시 계산해서 한 프레임에 여러 번 계산했음
     const cs = getComputedStyle(el), num = (v) => Math.round(parseFloat(v) || 0);
     const pad = [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].map(num), mar = [cs.marginTop, cs.marginRight, cs.marginBottom, cs.marginLeft].map(num);
@@ -700,21 +713,63 @@ function wireHandles(box) {
         mode.dragging = true;
         // 마우스 · 손가락 신호가 한 프레임에 여러 번 와도 마지막 것만 계산(화면 주사율 · 입력 빈도가 높을수록 일이 몇 배로 늘었음)
         let last = null, raf = 0;
-        const step = () => { raf = 0; const ev = last; if (!ev) return; last = null; onMove(p, start, ev.clientX - x0, ev.clientY - y0, el, ev); if (start.ghost) live(start.target, { sel: '', props: start.ghost }); else live(el, entry); };
+        // 채팅 화면처럼 큰 칸은 끄는 동안 실제로 바꾸면 긴 채팅 전체를 프레임마다 다시 배치해 뚝뚝 끊겼음 → 끄는 동안엔 선택 상자만 놓일 자리로 옮기고, 놓을 때 한 번 바꿈
+        // 설정 패널처럼 안에 칸이 많은 칸도 같은 이유로 끊겨서, 화면의 1/5 넘게 차지하거나 안쪽 칸이 300개 넘으면 같은 방식으로
+        const big = el.matches('#sheld, #chat') || r.width * r.height > innerWidth * innerHeight * 0.2 || el.getElementsByTagName('*').length > 300;
+        const step = () => {
+            raf = 0; const ev = last; if (!ev) return; last = null;
+            const dx = ev.clientX - x0, dy = ev.clientY - y0;
+            onMove(p, start, dx, dy, el, ev);
+            if (big) { const q = start.preview || start.want || { left: r.left + dx, top: r.top + dy, width: r.width, height: r.height }; mode.previewRect = q; box._key = null; outline(el); return; }
+            if (start.ghost) live(start.target, { sel: '', props: start.ghost }); else live(el, entry);
+        };
         const mv = (ev) => { last = ev; raf ||= requestAnimationFrame(step); };
         const up = () => {
             h.removeEventListener('pointermove', mv); h.removeEventListener('pointerup', up); h.removeEventListener('pointercancel', up);
             if (raf) { cancelAnimationFrame(raf); step(); }
-            mode.dragging = false; box._el = null; guides(null); onUp?.(p, start, el); tidy(); commit(); liveEnd(); paintBar();
-            if (mode.card && mode.el === el) drawCard(mode.card, el);
+            mode.dragging = false; mode.previewRect = null; box._el = null; guides(null); onUp?.(p, start, el); tidy(); commit(); liveEnd(); start.after?.(); landAt(el, p, start); paintBar();
+            // 옮기거나 키운 칸이 조절 칸 밑으로 들어가면 손잡이(칸 밖으로 조금 나와 있음)를 못 잡아서, 덮으면 옆으로 비켜 줌
+            if (mode.card && mode.el === el) { drawCard(mode.card, el); if (covers(mode.card, el, 16)) { const c = mode.card.getBoundingClientRect(); placeBeside(mode.card, el, c.left, c.top); } }
         };
         h.addEventListener('pointermove', mv); h.addEventListener('pointerup', up); h.addEventListener('pointercancel', up);
     });
+    // 놓은 뒤 실제 자리를 재서 끈 자리(want)와 다르면 위치로 맞춤: 테마가 칸을 화면 한쪽에 붙여 두거나(position fixed · left/right) 여백을 !important 로 막아 두면
+    // 여백으로 옮겨도 안 움직이고, 폭을 늘리면 반대쪽으로 늘어났음
+    const landAt = (el, p, s) => {
+        const w = s.want;
+        if (!w || !el.isConnected) return;
+        const off = () => { const q = el.getBoundingClientRect(); return [Math.round(w.left - q.left), Math.round(w.top - q.top)]; };
+        let [ox, oy] = off();
+        if (Math.abs(ox) <= 1 && Math.abs(oy) <= 1) return;
+        // 여백으로 옮겼는데 안 간 경우: 그 여백은 하는 일이 없으니 되돌리고 위치만으로
+        if (s.kind === 'margin') { for (const k of ['mt', 'ml', 'mr']) { if (s[k] == null) delete p[k]; else p[k] = s[k]; } refresh(); [ox, oy] = off(); }
+        if (Math.abs(ox) > 1) p.moveX = Math.round((p.moveX || 0) + ox);
+        if (Math.abs(oy) > 1) p.moveY = Math.round((p.moveY || 0) + oy);
+        tidy(); commit();
+    };
+    // 채팅 화면의 왼쪽 · 오른쪽 가장자리: 끄는 쪽 가장자리가 포인터를 따라가고 반대쪽은 그대로(폭은 채팅 폭으로, 어긋난 만큼 가로 위치로)
+    const chatEdge = (s, dx, left) => {
+        const sh = document.getElementById('sheld'), r0 = s.r0 ??= sh.getBoundingClientRect();
+        // 화면 밖으로는 안 나가게(끄는 쪽 가장자리는 화면 끝까지)
+        const w = Math.max(innerWidth * 0.25, Math.min(left ? r0.right : innerWidth - r0.left, r0.width + (left ? -dx : dx)));
+        const want = left ? { left: r0.right - w, right: r0.right } : { left: r0.left, right: r0.left + w };
+        s.preview = { left: want.left, top: r0.top, width: w, height: r0.height };
+        box.dataset.name = `채팅 폭 ${Math.round(w)}px`;
+        s.after = () => {
+            setScreen('chat', Math.round(w / innerWidth * 1000) / 10); refresh();
+            const e2 = styleEntry(sh, true), now = sh.getBoundingClientRect(), off = Math.round(want.left - now.left);
+            if (Math.abs(off) > 1) { e2.props.moveX = Math.round((e2.props.moveX || 0) + off); }
+            tidy(); commit();
+        };
+    };
     const CSSK = { pt: 'paddingTop', pr: 'paddingRight', pb: 'paddingBottom', pl: 'paddingLeft', mt: 'marginTop', mr: 'marginRight', mb: 'marginBottom', ml: 'marginLeft' };
     const SIGN = { pt: [0, 1], pb: [0, -1], pl: [1, 0], pr: [-1, 0], mt: [0, -1], mb: [0, 1], ml: [-1, 0], mr: [1, 0] };
     for (const band of box.querySelectorAll('.etk-tf-band')) {
         const k = band.dataset.k;
         drag(band, (p, s, dx, dy, el) => {
+            // 채팅 화면의 왼쪽 · 오른쪽 가장자리: 여백 대신 채팅 폭을 바꿈(채팅 칸을 화면 오른쪽에 붙여 두는 테마는 바깥 여백을 바꿔도 칸이 안 넓어졌음 —
+            // 끄는 쪽으로 넓어지게, 왼쪽을 왼쪽으로 끌면 넓어지고 오른쪽을 오른쪽으로 끌면 넓어짐)
+            if ((k === 'ml' || k === 'mr' || k === 'pl' || k === 'pr') && wideKey(el) === 'chat') { chatEdge(s, dx, k[1] === 'l'); return; }
             if (k === 'pt' || k === 'pb') minBase(el, styleEntry(el, true));
             s[k + '0'] ??= Math.round(parseFloat(getComputedStyle(el)[CSSK[k]]) || 0);
             let v = Math.round(s[k + '0'] + dx * SIGN[k][0] + dy * SIGN[k][1]);
@@ -728,7 +783,9 @@ function wireHandles(box) {
     // 보이는 자리만 옮기는 방식(translate)은 원래 자리가 비고 감싼 칸은 그대로라 따로 놀았음 → Alt 를 누른 채 끌 때만(겹쳐 놓기)
     drag(box.querySelector('.etk-tf-hmove'), (p, s, dx, dy, el, ev) => {
         if (!s.kind) {
-            s.kind = ev?.altKey || opts().freeMove ? 'free' : 'margin';
+            // 떠 있는 칸(설정 패널처럼 position fixed · absolute)은 차례가 없어서 순서 바꾸기 · 여백으로는 안 움직였음 → 위치로 옮김
+            const pos = getComputedStyle(el).position;
+            s.kind = ev?.altKey || opts().freeMove || pos === 'fixed' || pos === 'absolute' ? 'free' : 'margin';
             // 옆에 보이는 칸이 없으면(아이콘을 골랐는데 그걸 감싼 칸에 그것뿐인 경우 등) 한 칸씩 바깥으로 올라가 옆 칸이 있는 곳에서 순서를 바꿈
             const shown = (k) => { const q = k.getBoundingClientRect(); return q.width > 0 && q.height > 0 && getComputedStyle(k).visibility !== 'hidden'; };
             let t = el, par = null, pc = null, sibs = [];
@@ -759,7 +816,7 @@ function wireHandles(box) {
             const prev = before[before.length - 1]?.r, next = s.sibs[before.length]?.r;
             const line = s.row ? (prev && next ? (prev.right + next.left) / 2 : prev ? prev.right + 2 : next.left - 2) : (prev && next ? (prev.bottom + next.top) / 2 : prev ? prev.bottom + 2 : next.top - 2);
             if (s.row) guides(line, null); else guides(null, line);
-            s.ghost = { moveX: Math.round((p.moveX || 0) + dx), moveY: Math.round((p.moveY || 0) + dy) };
+            s.ghost = { moveX: Math.round((p.moveX || 0) + dx), moveY: Math.round((p.moveY || 0) + dy) }; s.dd = [dx, dy];
             return;
         }
         let sx = null, sy = null;
@@ -771,13 +828,16 @@ function wireHandles(box) {
             if (by) { dy += by.d; sy = by.at; }
         }
         guides(sx, sy);
+        s.want = { left: s.rect.left + dx, top: s.rect.top + dy, width: s.rect.width, height: s.rect.height };
         if (s.kind === 'free') { p.moveX = Math.round((s.moveX || 0) + dx); p.moveY = Math.round((s.moveY || 0) + dy); return; }
         // 여백으로: 아래로 끌면 위 여백이 늘고, 옆으로 끌면 왼쪽 여백을 늘린 만큼 오른쪽을 줄여 폭은 그대로
         if (Math.round(dy)) p.mt = Math.round(s.m0.mt + dy); else if (s.mt == null) delete p.mt; else p.mt = s.mt;
         if (Math.round(dx)) { p.ml = Math.round(s.m0.ml + dx); p.mr = Math.round(s.m0.mr - dx); }
         else { if (s.ml == null) delete p.ml; else p.ml = s.ml; if (s.mr == null) delete p.mr; else p.mr = s.mr; }
     }, (p, s, el) => {
-        if (s.kind !== 'order' || s.index == null || s.index === s.from) return;
+        if (s.kind !== 'order') return;
+        // 옆 칸을 넘지 않고 놓으면 순서는 그대로라 아무 일도 없었음(채팅 목록을 옆으로 끌어도 안 움직임) → 끈 만큼 그 자리로
+        if (s.index == null || s.index === s.from) { if (s.dd && (Math.abs(s.dd[0]) > 2 || Math.abs(s.dd[1]) > 2)) { const t = styleEntry(s.target, true).props; t.moveX = Math.round((t.moveX || 0) + s.dd[0]); t.moveY = Math.round((t.moveY || 0) + s.dd[1]); } return; }
         // 옆 칸들이 같은 셀렉터로 묶이면(이름이 같은 칸들) 순서를 따로 줄 수 없어서 그대로 둠
         const sels = [s.target, ...s.sibs.map(x => x.k)].map(x => selectorFor(x));
         if (new Set(sels).size !== sels.length) return;
@@ -786,8 +846,43 @@ function wireHandles(box) {
         list.splice(s.index, 0, s.target);
         list.forEach((x, n) => { styleEntry(x, true).props.order = n * 10; });
     });
-    drag(box.querySelector('.etk-tf-hw'), (p, s, dx) => { p.width = Math.max(8, Math.round(s.w + dx)); });
-    drag(box.querySelector('.etk-tf-hh'), (p, s, dx, dy, el) => { if (/^(IMG|VIDEO|CANVAS)$/i.test(el.tagName)) { p.width = Math.max(8, Math.round(s.w + dy * (s.w / Math.max(1, s.h)))); } else p.height = Math.max(4, Math.round(s.h + dy)); });
+    // 폭 · 높이: 끄는 오른쪽 · 아래 가장자리만 따라오고 왼쪽 · 위는 그대로(오른쪽에 붙은 칸은 폭을 늘리면 왼쪽으로 늘어났음 → 놓을 때 위치로 맞춤)
+    drag(box.querySelector('.etk-tf-hw'), (p, s, dx, dy, el) => {
+        if (wideKey(el) === 'chat') { chatEdge(s, dx, false); return; }
+        p.width = Math.max(8, Math.round(s.w + dx));
+        s.want = { left: s.rect.left, top: s.rect.top, width: p.width, height: s.h };
+    });
+    drag(box.querySelector('.etk-tf-hh'), (p, s, dx, dy, el) => {
+        if (/^(IMG|VIDEO|CANVAS)$/i.test(el.tagName)) { p.width = Math.max(8, Math.round(s.w + dy * (s.w / Math.max(1, s.h)))); s.want = { left: s.rect.left, top: s.rect.top, width: p.width, height: s.h * p.width / Math.max(1, s.w) }; }
+        else { p.height = Math.max(4, Math.round(s.h + dy)); s.want = { left: s.rect.left, top: s.rect.top, width: s.w, height: p.height }; }
+    });
+}
+// 막대 자리: 화면 밖으로는 안 나가게
+function placeBar(x, y, r) {
+    const bar = mode?.bar; if (!bar) return;
+    Object.assign(bar.style, { left: `${Math.max(0, Math.min(x, innerWidth - r.width))}px`, top: `${Math.max(0, Math.min(y, innerHeight - r.height))}px`, bottom: 'auto', transform: 'none' });
+    bar.classList.remove('etk-tf-bar-dodge');
+}
+const BAR_KEY = 'breeze.themeFitBar';
+function barPos(v) {
+    try {
+        const all = JSON.parse(localStorage.getItem(BAR_KEY) || '{}');
+        if (v === undefined) return all[dev()] || null;
+        all[dev()] = v; localStorage.setItem(BAR_KEY, JSON.stringify(all));
+    } catch { /* 저장 못 해도 이번엔 그 자리 */ }
+    return null;
+}
+// 고른 칸(과 바깥으로 조금 나온 손잡이)을 막대가 덮으면 손잡이를 못 잡아서(입력창은 막대 바로 밑이라 옮기기 손잡이가 가려졌음), 막대를 화면 반대쪽 끝으로 잠시 비킴
+function dodgeBar(r) {
+    const bar = mode?.bar; if (!bar || mode.barDragging) return;
+    const was = bar.classList.contains('etk-tf-bar-dodge');
+    if (was) bar.classList.remove('etk-tf-bar-dodge');
+    const b = bar.getBoundingClientRect(), pad = 26;
+    const hit = r && b.left < r.right + pad && b.right > r.left - pad && b.top < r.bottom + pad && b.bottom > r.top - pad;
+    if (!hit) return;
+    const up = r.top + r.height / 2 > innerHeight / 2;   // 칸이 화면 아래쪽이면 막대를 맨 위로, 위쪽이면 맨 아래로
+    bar.classList.add('etk-tf-bar-dodge');
+    bar.style.setProperty('--tf-dodge-top', up ? '8px' : `${innerHeight - b.height - 8}px`);
 }
 function follow() {
     if (!mode) return;
@@ -805,7 +900,8 @@ function paintBar() {
     mode.bar.querySelector('.etk-tf-redo').classList.toggle('disabled', !mode.redo.length);
     mode.bar.querySelector('.etk-tf-snapbtn').classList.toggle('etk-on', !opts().noSnap);
     mode.bar.querySelector('.etk-tf-pickbtn').classList.toggle('etk-on', !!mode.picking && !mode.zap);
-    mode.bar.querySelector('.etk-tf-pickbtn').hidden = !(mode.picking && !mode.zap);
+    // 고르기 버튼은 늘 막대에(고르는 중에만 보이게 했더니, 한 번 그만 고르면 막대에서 다시 고를 수가 없어 테마 맞추기를 닫았다 열어야 했음)
+    { const pb = mode.bar.querySelector('.etk-tf-pickbtn'), on = !!mode.picking && !mode.zap; pb.hidden = false; pb.innerHTML = `<i class="fa-solid fa-crosshairs"></i> ${on ? '고르는 중' : '고르기'}`; pb.title = on ? '고르는 중이에요. 누르면 그만 골라요(Esc 도 돼요)' : '화면에서 고칠 곳 고르기'; }
     mode.bar.querySelector('.etk-tf-zapbtn').classList.toggle('etk-on', !!mode.picking && !!mode.zap);
     mode.box.classList.toggle('etk-tf-zapping', !!mode.picking && !!mode.zap);
     mode.bar.querySelector('.etk-tf-areabtn')?.classList.toggle('etk-on', !!mode.area);
@@ -853,14 +949,17 @@ export function openFit() {
     peekBtn.addEventListener('pointerdown', peekOn);
     for (const t of ['pointerup', 'pointerleave', 'pointercancel']) peekBtn.addEventListener(t, peekOff);
     // 막대가 고치려는 곳을 덮으면 이름 부분을 잡고 끌어 옮김
-    const grip = bar.querySelector('.etk-tf-title');
-    grip.addEventListener('pointerdown', (e) => {
+    // 막대 옮기기: 버튼이 아닌 곳 아무 데나 잡고 끌기(이름 부분만 잡히게 했더니 옮길 수 있는 줄 몰랐음). 자리는 기기마다 기억
+    bar.addEventListener('pointerdown', (e) => {
+        if (e.button > 0 || e.target.closest('.menu_button, select, input')) return;
+        e.preventDefault();
         const r = bar.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
-        grip.setPointerCapture(e.pointerId);
-        const mv = (ev) => Object.assign(bar.style, { left: `${Math.max(0, Math.min(ev.clientX - dx, innerWidth - r.width))}px`, top: `${Math.max(0, Math.min(ev.clientY - dy, innerHeight - r.height))}px`, bottom: 'auto', transform: 'none' });
-        const up = () => { grip.removeEventListener('pointermove', mv); grip.removeEventListener('pointerup', up); };
-        grip.addEventListener('pointermove', mv); grip.addEventListener('pointerup', up);
+        const mv = (ev) => placeBar(ev.clientX - dx, ev.clientY - dy, r);
+        const up = () => { document.removeEventListener('pointermove', mv, true); document.removeEventListener('pointerup', up, true); document.removeEventListener('pointercancel', up, true);
+            const q = bar.getBoundingClientRect(); barPos(q.left === r.left && q.top === r.top ? undefined : { x: Math.round(q.left / innerWidth * 1000) / 1000, y: Math.round(q.top / innerHeight * 1000) / 1000 }); };
+        document.addEventListener('pointermove', mv, true); document.addEventListener('pointerup', up, true); document.addEventListener('pointercancel', up, true);
     });
+    { const saved = barPos(); if (saved) requestAnimationFrame(() => { const r = bar.getBoundingClientRect(); placeBar(saved.x * innerWidth, saved.y * innerHeight, r); }); }
     window.addEventListener('keydown', onKey, true);
     paintBar();
     paintTint();
@@ -1158,7 +1257,8 @@ function downOf(e) {
 // 채팅 폭 · 패널 폭은 실리태번 값(--sheldWidth)이나 패널 최소 폭으로 바꿔야 해서, 그 칸을 골랐을 때 일반 '폭' 대신 이것을 씀(따로 '전체' 칸에 두지 않음)
 function wideKey(el) {
     if (isPhone()) return null;
-    if (el.matches('#sheld, #chat')) return 'chat';
+    // 메시지 상자를 골라도 채팅 폭으로(메시지는 채팅 칸 안이라 메시지 폭만 바꾸면 그 메시지만 늘거나 채팅 칸에 막혔음)
+    if (el.matches('#sheld, #chat, #chat > .mes')) return 'chat';
     if (el.matches('#left-nav-panel, #right-nav-panel')) return 'side';
     if (el.matches('#top-settings-holder .drawer-content')) return 'panel';
     return null;
@@ -1208,8 +1308,8 @@ function placeBeside(card, el, x, y) {
     place(card, roomR >= roomL ? innerWidth : -innerWidth, y);
 }
 // 카드가 고른 칸(바깥 여백 포함)과 겹치는지: 칸을 옮겨 고를 때 카드가 그대로 덮고 있으면 비켜 줌
-function covers(card, el) {
-    const c = card.getBoundingClientRect(), r = el.getBoundingClientRect(), cs = getComputedStyle(el), m = (k) => Math.max(0, parseFloat(cs[k]) || 0);
+function covers(card, el, pad = 0) {
+    const c = card.getBoundingClientRect(), r = el.getBoundingClientRect(), cs = getComputedStyle(el), m = (k) => Math.max(0, parseFloat(cs[k]) || 0) + pad;
     const L = Math.max(0, r.left - m('marginLeft')), R = Math.min(innerWidth, r.right + m('marginRight')), T = Math.max(0, r.top - m('marginTop')), B = Math.min(innerHeight, r.bottom + m('marginBottom'));
     return c.left < R && c.right > L && c.top < B && c.bottom > T;
 }
@@ -1519,6 +1619,23 @@ function drawCard(card, el) {
         input.addEventListener('input', () => { const n = Number(input.value); if (Number.isFinite(n) && n > 0) { setScreen(wide, n); commit(); paintBar(); } });
         box.querySelector('.etk-tf-nx')?.addEventListener('click', (e) => { e.preventDefault(); remember(); setScreen(wide, 0); commit(); paintBar(); drawCard(card, el); });
         box.querySelector('.etk-tf-scope').addEventListener('click', (e) => pickThemes(e.currentTarget, shareOf(wide)?.themes || [], (themes) => { remember(); setShare(wide, themes); commit(); paintBar(); drawCard(card, el); }));
+        // 채팅 칸을 넓혀도 메시지 안 왼쪽 빈자리(이름 칸을 왼쪽에 두는 테마는 160px 넘게 비워 둠) 때문에 글은 그대로 좁았음 → 모든 메시지의 왼쪽 빈자리도 여기서
+        if (wide === 'chat') {
+            const SEL = '#chat .mes', mes = [...document.querySelectorAll('#chat .mes')].pop();
+            const cur = themeOpt().styles?.find(x => x.sel === SEL)?.props?.pl;
+            const now = cur ?? (mes ? Math.round(parseFloat(getComputedStyle(mes).paddingLeft)) || 0 : 0);
+            box.insertAdjacentHTML('beforeend', `<div class="etk-tf-row"><span>메시지 왼쪽 빈자리</span><label class="etk-tf-n ${cur != null ? 'etk-set' : ''}"><input type="number" class="etk-tf-mespl" min="0" step="1" value="${now}"><small>px</small>${cur != null ? '<i class="etk-tf-nx etk-tf-mesx" title="테마대로">×</i>' : ''}</label></div>`);
+            const pl = box.querySelector('.etk-tf-mespl');
+            pl.addEventListener('focus', remember);
+            pl.addEventListener('input', () => {
+                const n = Number(pl.value); if (!Number.isFinite(n) || n < 0) return;
+                const tt = themeOpt(true); tt.styles ??= [];
+                let x = tt.styles.find(y => y.sel === SEL);
+                if (!x) { x = wireStyle({ sel: SEL, label: '모든 메시지', dev: {} }); tt.styles.push(x); }
+                x.props.pl = n; commit(); paintBar();
+            });
+            box.querySelector('.etk-tf-mesx')?.addEventListener('click', (e) => { e.preventDefault(); remember(); const x = themeOpt(true).styles?.find(y => y.sel === SEL); if (x) delete x.props.pl; tidy(); commit(); paintBar(); drawCard(card, el); });
+        }
     }
     card.querySelector('.etk-tf-what').textContent = whatText;
     const pathBox = card.querySelector('.etk-tf-path');
@@ -1600,15 +1717,16 @@ function areaOf(sel) {
 function fixItems() {
     const t = themeOpt(), s = opts().screen[dev()], items = [];
     const unit = (k) => SLIDERS[k].unit;
-    const whole = (name, text, drop) => items.push({ area: 'all', name, text, drop });
-    for (const k of SCREEN_KEYS) if (s[k]) whole(SLIDERS[k].label, `${s[k]}${unit(k)} · 모든 테마(예전 값)`, () => { delete s[k]; });
-    for (const k of SCREEN_KEYS) { const g = shareOf(k); if (g) whole(SLIDERS[k].label, `${g.v ? `${g.v}${unit(k)}` : '테마대로'} · 테마 ${g.themes.length}개가 함께`, () => { g.themes = g.themes.filter(n => n !== themeName()); if (g.themes.length < 2) delete opts().share[dev()][k]; }); }
-    for (const [k, v] of Object.entries(t.scr?.[dev()] || {})) whole(SLIDERS[k]?.label || k, `${v ? `${v}${unit(k)}` : '테마대로'} · 이 테마만`, () => { delete t.scr[dev()][k]; });
-    if (t.avatar > 0) whole('프로필 사진 최대 폭', `${t.avatar}px`, () => { delete t.avatar; });
-    if (t.noFont) whole('테마 글꼴', '끔', () => { delete t.noFont; delete t.font; });
-    if (t.area?.mg != null) items.push({ area: 'chat', name: '메시지 사이 간격', text: `${t.area.mg > 0 ? '+' : ''}${t.area.mg}px`, drop: () => { delete t.area.mg; delete t.area.mgX; delete t.area.mgV0; } });
-    if (t.area?.av) items.push({ area: 'chat', name: '사진 크기', text: `${t.area.av}px`, drop: () => { t.area.av = t.area.avCss = t.area.avW0 = null; } });
-    if (t.area?.d != null) items.push({ area: 'panel', name: '프롬프트 · 캐릭터 목록 줄 간격', text: `${t.area.d > 0 ? '+' : ''}${t.area.d}px`, drop: () => { delete t.area.d; delete t.area.rowH; } });
+    const offKey = (key, it) => Object.assign(it, { off: isOff(key, t), toggle: () => { const tt = themeOpt(true); tt.offs ??= []; if (tt.offs.includes(key)) tt.offs = tt.offs.filter(x => x !== key); else tt.offs.push(key); } });
+    const whole = (name, text, drop, key) => items.push(key ? offKey(key, { area: 'all', name, text, drop }) : { area: 'all', name, text, drop });
+    for (const k of SCREEN_KEYS) if (s[k]) whole(SLIDERS[k].label, `${s[k]}${unit(k)} · 모든 테마(예전 값)`, () => { delete s[k]; }, `scr:${k}`);
+    for (const k of SCREEN_KEYS) { const g = shareOf(k); if (g) whole(SLIDERS[k].label, `${g.v ? `${g.v}${unit(k)}` : '테마대로'} · 테마 ${g.themes.length}개가 함께`, () => { g.themes = g.themes.filter(n => n !== themeName()); if (g.themes.length < 2) delete opts().share[dev()][k]; }, `scr:${k}`); }
+    for (const [k, v] of Object.entries(t.scr?.[dev()] || {})) whole(SLIDERS[k]?.label || k, `${v ? `${v}${unit(k)}` : '테마대로'} · 이 테마만`, () => { delete t.scr[dev()][k]; }, `scr:${k}`);
+    if (t.avatar > 0) whole('프로필 사진 최대 폭', `${t.avatar}px`, () => { delete t.avatar; }, 'avatar');
+    if (t.noFont) whole('테마 글꼴', '끔', () => { delete t.noFont; delete t.font; }, 'noFont');
+    if (t.area?.mg != null) items.push(offKey('mg', { area: 'chat', name: '메시지 사이 간격', text: `${t.area.mg > 0 ? '+' : ''}${t.area.mg}px`, drop: () => { delete t.area.mg; delete t.area.mgX; delete t.area.mgV0; } }));
+    if (t.area?.av) items.push(offKey('av', { area: 'chat', name: '사진 크기', text: `${t.area.av}px`, drop: () => { t.area.av = t.area.avCss = t.area.avW0 = null; } }));
+    if (t.area?.d != null) items.push(offKey('d', { area: 'panel', name: '프롬프트 · 캐릭터 목록 줄 간격', text: `${t.area.d > 0 ? '+' : ''}${t.area.d}px`, drop: () => { delete t.area.d; delete t.area.rowH; } }));
     // 지금 기기에서 고친 것만 보이고, 지우면 이 기기 값만 지움(다른 기기 값이 남으면 항목은 둠)
     (t.styles || []).forEach((x, i) => { if (Object.keys(x.props).length) items.push({ area: areaOf(x.sel), name: x.label || x.sel, text: PROP_TEXT(x.props), sel: x.sel, at: x.at || 0, order: i, obj: x, drop: () => { delete x.dev[dev()]; if (!devCount(x)) t.styles = t.styles.filter(y => y !== x); } }); });
     (t.fixes || []).forEach((f, i) => items.push({ area: areaOf(f.sel), name: f.label || f.sel, text: f.how === 'hide' ? '숨김 · 이 테마만' : '뒤에 있는 것 누르기', sel: f.sel, at: f.at || 0, order: 1000 + i, obj: f, hide: f.how === 'hide' ? 'theme' : null, drop: () => { t.fixes = t.fixes.filter(x => x !== f); } }));
@@ -1845,13 +1963,13 @@ function toggleList() {
             if (!open) continue;
             for (const it of g.rows) {
                 const row = document.createElement('div');
-                const off = !!it.obj?.off;
+                const off = it.toggle ? it.off : !!it.obj?.off;
                 row.className = `etk-tf-list-row${off ? ' etk-off' : ''}${it.sel && !it.hide ? ' interactable' : ''}`;
-                row.innerHTML = `<div class="etk-tf-list-txt"><b></b><small></small></div>${it.hide ? `<div class="fa-solid fa-layer-group interactable etk-tf-list-scope" title="${it.hide === 'all' ? '이 테마에서만 숨기기로 바꾸기' : '모든 테마에서 숨기기로 바꾸기'}"></div>` : ''}${it.obj ? `<div class="fa-solid ${off ? 'fa-eye-slash' : 'fa-eye'} interactable etk-tf-list-off" title="${off ? '다시 켜기' : '잠깐 끄기(지우지 않고 원래 테마대로 보기)'}"></div>` : ''}<div class="fa-solid fa-xmark interactable etk-tf-list-del" title="지우기"></div>`;
+                row.innerHTML = `<div class="etk-tf-list-txt"><b></b><small></small></div>${it.hide ? `<div class="fa-solid fa-layer-group interactable etk-tf-list-scope" title="${it.hide === 'all' ? '이 테마에서만 숨기기로 바꾸기' : '모든 테마에서 숨기기로 바꾸기'}"></div>` : ''}${it.obj || it.toggle ? `<div class="fa-solid ${off ? 'fa-eye-slash' : 'fa-eye'} interactable etk-tf-list-off" title="${off ? '다시 켜기' : '잠깐 끄기(지우지 않고 원래 테마대로 보기)'}"></div>` : ''}<div class="fa-solid fa-xmark interactable etk-tf-list-del" title="지우기"></div>`;
                 row.querySelector('b').textContent = it.name;
                 row.querySelector('small').textContent = off ? `꺼 둠 · ${it.text}` : it.text;
                 row.querySelector('.etk-tf-list-del').addEventListener('click', (e) => { e.stopPropagation(); remember(); it.drop(); tidy(); commit(); paintBar(); draw(); });
-                row.querySelector('.etk-tf-list-off')?.addEventListener('click', (e) => { e.stopPropagation(); remember(); if (it.obj.off) delete it.obj.off; else it.obj.off = true; commit(); draw(); });
+                row.querySelector('.etk-tf-list-off')?.addEventListener('click', (e) => { e.stopPropagation(); remember(); if (it.toggle) it.toggle(); else if (it.obj.off) delete it.obj.off; else it.obj.off = true; tidy(); commit(); draw(); });
                 row.querySelector('.etk-tf-list-scope')?.addEventListener('click', (e) => { e.stopPropagation(); remember(); addHide(it.sel, it.name, it.hide !== 'all', it.obj); tidy(); commit(); paintBar(); draw(); });
                 if (it.sel && !it.hide) row.addEventListener('click', () => {
                     const el = findOnScreen(it.sel);

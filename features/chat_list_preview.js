@@ -74,7 +74,7 @@ function visibleText(html) {
     return prose.replace(/\s+/g, '').length >= 40 ? prose : all;
 }
 
-function toScreen(raw, avatar, isUser, preset) {
+export function toScreen(raw, avatar, isUser, preset) {
     if (typeof raw !== 'string' || !raw || raw.startsWith('[The ')) return raw;
     let t = dropReasoning(raw);
     const { scripts, name } = displayScripts(avatar, isUser, preset);
@@ -97,7 +97,24 @@ function bodyOf(init) {
 }
 
 let orig = null, wrapped = null, on = false;
-export function start() {
+// 우리가 바꾼 글이 화면에 그대로 나오는지: 실리태번이 목록을 그린 조금 뒤 미리보기 칸을 우리가 만든 글과 견줌.
+// 칸 두 개 이상이 전부 우리 글이 아니면 다른 쪽이 그린 뒤에 고쳐 쓰는 것(그쪽 글이 보이므로 우리 일은 헛일) → 쉬는 중 표시만(바꾸기는 계속, 그쪽이 꺼지면 바로 보이게)
+const PREVIEW_CELLS = '.select_chat_block_mes, .recentChat .chatMessage';
+const flat = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+let produced = new Set(), lookTimer = 0;
+function lookLater() {
+    clearTimeout(lookTimer);
+    lookTimer = setTimeout(() => {
+        const cells = [...document.querySelectorAll(PREVIEW_CELLS)].map(el => flat(el.textContent)).filter(Boolean);
+        if (cells.length < 2 || !produced.size) return;
+        const ours = cells.filter(t => produced.has(t) || [...produced].some(p => p.endsWith(t.replace(/^\.\.\./, '')))).length;
+        if (ours) { api?.rest(null); return; }
+        api?.rest('same', { saw: 'breeze가 다듬은 미리보기 글을 화면에 그린 뒤, 다른 쪽이 또 고쳐 썼어요', who: { kind: 'unknown' }, back: '그쪽을 끄면 다음에 목록을 열 때부터 breeze 글이 보여요.' });
+    }, 1500);
+}
+let api = null;
+export function start(a) {
+    api = a;
     loadPresetRegex();
     globalThis[Symbol.for('breeze.toScreen')] = toScreen;
     on = true;
@@ -113,17 +130,25 @@ export function start() {
             const data = await res.clone().json();
             if (!Array.isArray(data)) return res;
             const body = bodyOf(init);
+            produced = new Set();
             for (const item of data) {
                 if (!item || typeof item !== 'object') continue;
                 const avatar = item.avatar || body.avatar_url || null;
                 if (path === '/api/chats/search') {
-                    if (typeof item.preview_source !== 'string') continue;
-                    const t = toScreen(item.preview_source, avatar, item.mes_is_user, item.mes_preset);
+                    // 채팅 파일 관리 창 기능이 켜져 있으면 그쪽이 줄 글을 따로 그려서 여기 일은 헛일 → 건너뜀
+                    if (globalThis[Symbol.for('breeze.chatFileList')] && item.preview_head) continue;
+                    // 서버가 마지막 글 조각을 못 준 항목(마지막 줄을 못 읽음)은 실리태번 미리보기 글(끝 400자)이라도 다듬음 — 안 하면 태그가 그대로 보였음
+                    const raw = item.preview_tail || (item.display_mes || item.preview_source || item.preview_message);
+                    if (typeof raw !== 'string') continue;
+                    const t = toScreen(raw, avatar, item.mes_is_user, item.mes_preset);
                     item.preview_message = t.length > PREVIEW_LEN ? '...' + t.slice(-PREVIEW_LEN) : t;
+                    produced.add(flat(item.preview_message));
                 } else if (typeof item.mes === 'string') {
                     item.mes = toScreen(item.display_mes || item.mes, avatar, item.mes_is_user, item.mes_preset);
+                    produced.add(flat(item.mes));
                 }
             }
+            lookLater();
             return new Response(JSON.stringify(data), { status: res.status, statusText: res.statusText, headers: res.headers });
         } catch (error) {
             console.warn('[Breeze] 미리보기 다듬기', error);

@@ -47,8 +47,10 @@ function resolve(ref, list) {
     return hit || null;
 }
 // 켤 것 · 끌 것 맞추기: 실행 중인 규칙이 고른 스크립트는 켜고, 다른 규칙에만 걸린 스크립트는 끔. restart 의 id 는 껐다가 다시 켬(같은 조건 안에서 배치가 바뀐 경우)
+// 다른 쪽이 같은 스크립트를 켜고 끄는지: 우리가 맞춘 1.5초 뒤 다시 보고, 되돌려져 있으면 한 번 더 맞춤 → 또 되돌려지면 물러남(서로 번갈아 켜고 끄지 않게)
+let syncGen = 0, flips = 0, fought = false;
 async function thSync(restart = new Set()) {
-    const th = helper(); if (!th) return;
+    const th = helper(); if (!th || fought) return;
     const list = thList();
     const linked = new Map(), want = new Set();
     for (const r of rules()) for (const ref of r.th || []) {
@@ -62,6 +64,21 @@ async function thSync(restart = new Set()) {
         if (off.length) await th.updateScriptTreesWith(t => t.map(flip(x => (off.includes(x.id) ? false : x.enabled))), { type: 'global' });
         const differs = [...linked.values()].some(x => (off.includes(x.id) ? false : x.enabled) !== want.has(x.id));
         if (differs || off.length) await th.updateScriptTreesWith(t => t.map(flip(x => want.has(x.id))), { type: 'global' });
+        if (differs || off.length) {
+            const gen = ++syncGen;
+            setTimeout(() => {
+                if (gen !== syncGen || fought) return;
+                const now = thList();
+                const back = [...linked.keys()].map(id => now.find(x => x.id === id)).filter(x => x && x.enabled !== want.has(x.id));
+                if (!back.length) { flips = 0; return; }
+                if (++flips >= 2) {
+                    fought = true;
+                    api?.rest('clash', { saw: `breeze가 켜고 끈 태번 헬퍼 스크립트(${back.map(x => x.name).join(', ')})를 다른 쪽이 곧바로 되돌렸어요`, who: { kind: 'unknown' }, back: '그쪽을 끄고 새로고침하면 다시 해요.' });
+                    return;
+                }
+                thSync();
+            }, 1500);
+        }
     } catch (e) { console.warn('[Breeze] 태번 헬퍼 스크립트 켜고 끄기', e); }
 }
 
@@ -213,6 +230,7 @@ const onThemePick = () => setTimeout(() => sync(), 200);
 
 export function start(a) {
     api = a;
+    fought = false; flips = 0;
     off = onThemeCss(({ css }) => sync(css));
     document.addEventListener('change', themePickListener, true);
     // 태번 헬퍼는 확장 중 늦게 뜰 수 있음 — 뜨면 한 번 맞춤(최대 30초 기다림)

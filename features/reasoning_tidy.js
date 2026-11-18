@@ -1,3 +1,4 @@
+import { theme } from '../lib/who.js';
 // 생각(추론) 칸 모양 — 여러 테마의 추론 칸을 참고한 모양 몇 가지 중 하나를 고르거나, 다른 사람이 준 CSS 를 붙여넣는다.
 // 추론 칸을 직접 꾸민 테마의 모양을 덮지 않게, 지금 테마 CSS 에 추론 상자 · 머리 줄 · 추론 글 칸 자체를 꾸미는 규칙이 있으면 쉰다
 // (추론 글 안 인용문 · 코드 · 수정 버튼만 손본 규칙은 셈하지 않음).
@@ -91,7 +92,7 @@ function applyRest() {
     const override = overrides().includes(themeName());
     const mine = override || !(lastTheme && themeStyles(lastTheme));
     document.body.classList.toggle('etk-reasoning-tidy', mine);
-    api?.rest?.(mine ? null : 'same');   // 테마가 추론 칸을 꾸며서 쉬는 중
+    if (mine) api?.rest?.(null); else api?.rest?.('same', { saw: '테마 CSS가 추론 칸을 꾸미고 있어요', who: theme(), back: "세부 설정에서 '이 테마에서는 breeze 모양 쓰기'를 고르면 breeze 모양을 써요." });   // 테마가 추론 칸을 꾸며서 쉬는 중
 }
 const pick = () => (STYLES[api?.options().look] ? api.options().look : 'star');
 
