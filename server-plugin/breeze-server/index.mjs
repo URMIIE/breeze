@@ -19,7 +19,7 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const ROOT = process.cwd();
 const TAG = '[breeze]';
 // 플러그인 버전: breeze 확장 버전(manifest.json)과 같게 둠(둘이 다른 이름을 쓰면 헷갈려서). 배포할 때 manifest 버전과 함께 올림
-const PLUGIN_VERSION = '1.2.0';
+const PLUGIN_VERSION = '1.2.2';
 const verNum = (v) => (typeof v === 'number' ? v : String(v || '').split('.').slice(0, 3).reduce((a, n) => a * 1000 + (Number(n) || 0), 0));
 const PLUGIN_FILES = ['index.mjs', 'client-patches.mjs', 'package.json'];
 let updatedTo = 0;
@@ -73,7 +73,7 @@ function updateInfo() {
     try { available = newestCopy()?.version || 0; } catch { /* 못 찾음 */ }
     return { plugin: PLUGIN_VERSION, updated: updatedTo, available, autoUpdate: readConfig().autoUpdate === true };
 }
-const FEATURES = ['lazy_load', 'folder_cache', 'chat_cache', 'no_local_compression', 'regex_hook', 'tab_icon', 'loading_screen'];
+const FEATURES = ['lazy_load', 'folder_cache', 'chat_cache', 'no_local_compression', 'regex_hook', 'tab_icon', 'loading_screen', 'light_chat_open', 'early_message_frames', 'near_message_frames', 'settings_once'];
 /** 기능 → 'on' | 'off' | 'mismatch: 까닭' */
 const status = {};
 const undo = [];   // 서버를 끌 때 되돌릴 일
@@ -81,7 +81,9 @@ const undo = [];   // 서버를 끌 때 되돌릴 일
 function config() {
     try { return JSON.parse(fs.readFileSync(path.join(HERE, 'config.json'), 'utf8')).features || {}; } catch { return {}; }
 }
-const wanted = (name) => config()[name] !== false;
+// 다른 기능이 쓰는 받침(연결 지점 · 로딩 화면 파일 읽기)은 설정과 상관없이 늘 켬: 화면에 줄이 없어 꺼 둔 채로 남으면 켤 길이 없음
+const ALWAYS_ON = new Set(['regex_hook', 'loading_screen']);
+const wanted = (name) => ALWAYS_ON.has(name) || config()[name] !== false;
 function rest(name, why) { status[name] = `mismatch: ${why}`; console.warn(`${TAG} ${name}: 이 실리태번 버전과 안 맞아 쉼 — ${why}`); }
 
 const load = (rel) => import(pathToFileURL(path.join(ROOT, rel)).href);
@@ -156,6 +158,18 @@ function probeSettingsHandler(original) {
     } finally {
         fs.rmSync(tmp, { recursive: true, force: true });
     }
+}
+
+// breeze 확장이 그 사용자 확장 폴더나 전역 확장 폴더에 아직 있는지(폴더 이름은 사람마다 달라 로딩 화면 기능 파일로 알아봄).
+// 확장을 지웠는데 남은 로딩 화면 파일 때문에 로딩 화면이 계속 바뀌어 있지 않게
+function breezeInstalled(user) {
+    const roots = [user?.directories?.extensions, path.join(ROOT, 'public', 'scripts', 'extensions', 'third-party')].filter(Boolean);
+    for (const root of roots) {
+        let names = [];
+        try { names = fs.readdirSync(root); } catch { continue; }
+        if (names.some(n => fs.existsSync(path.join(root, n, 'features', 'loading_screen.js')) && fs.existsSync(path.join(root, n, 'manifest.json')))) return true;
+    }
+    return false;
 }
 
 const partMemo = new Map();
@@ -293,7 +307,7 @@ function lastMessage(file) {
 }
 
 // 파일 앞 조각만 읽어 첫 메시지(머리 줄 다음 줄)를 얻음. 채팅 이름의 날짜는 분기 채팅이면 원래 채팅 것이라 시작 날짜로 못 씀
-function firstMessage(file) {
+function firstMessage(file, withHead = false) {
     let fd;
     try {
         fd = fs.openSync(file, 'r');
@@ -305,8 +319,10 @@ function firstMessage(file) {
             fs.readSync(fd, buf, 0, len, 0);
             const lines = buf.toString('utf8').split('\n');
             if (lines.length > 2 || len === size) {
-                for (const l of lines.slice(1, len === size ? undefined : -1)) { try { const m = JSON.parse(l); if (m && typeof m.mes === 'string') return m; } catch { /* 깨진 줄 */ } }
-                return null;
+                // 머리 줄(채팅 정보)은 크면 수백 KB 라 통째로 해석하지 않고 분기 표시(main_chat)가 있는지만 글자로 봄
+                const head = withHead ? { branch: /"main_chat"\s*:\s*"[^"]/.test(lines[0]) } : null;
+                for (const l of lines.slice(1, len === size ? undefined : -1)) { try { const m = JSON.parse(l); if (m && typeof m.mes === 'string') return withHead ? { m, head } : m; } catch { /* 깨진 줄 */ } }
+                return withHead ? { m: null, head } : null;
             }
             if (want >= 64 * 1024 * 1024) return null;
             want *= 4;
@@ -340,18 +356,25 @@ function addPreviewFields(items, fileOf, withSource = false) {
             }
             item.display_mes = '';
         }
-        if (withSource) { const first = firstMessage(file); if (first?.send_date) item.first_date = first.send_date; }   // 찾기 응답의 미리보기는 끝 400자로 잘려 있어 통째로 한 번 더
+        if (withSource) {
+            const r = firstMessage(file, true), first = r?.m;
+            if (first?.send_date) item.first_date = first.send_date;   // 찾기 응답의 미리보기는 끝 400자로 잘려 있어 통째로 한 번 더
+            // 분기 채팅은 모채팅 메시지(보낸 시각 포함)를 그대로 복사해 '마지막 대화'가 모채팅 시각이라, 방금 만든 분기도 '한 달 전'으로 · 최근순 아래에 떴음
+            // → 분기 채팅이면 파일을 만든 시각도 보냄(화면에서 마지막 대화와 둘 중 늦은 쪽을 씀)
+            if (r?.head?.branch) { const st = fs.statSync(file, { throwIfNoEntry: false }); if (st?.birthtimeMs > 0) item.branch_born = Math.round(st.birthtimeMs); }
+        }
     }
 }
 
-function cachedList(key, stampOf, fileOf, withSource = false) {
+// memo: 꺼져 있으면 응답을 기억해 두었다 다시 쓰는 것만 안 하고, 미리보기 칸은 그대로 붙임
+function cachedList(key, stampOf, fileOf, withSource = false, memo = true) {
     return (request, response, next) => {
         let memoKey, stamp;
         try {
             memoKey = `${request.user.profile?.handle ?? ''}|${key}|${JSON.stringify(request.body ?? {})}`;
-            stamp = stampOf(request);
+            stamp = memo ? stampOf(request) : '';
         } catch { return next(); }
-        const hit = chatMemo.get(memoKey);
+        const hit = memo && chatMemo.get(memoKey);
         if (hit && hit.stamp === stamp) return response.type('application/json').send(hit.json);
         // 원래 처리기가 보내는 응답을 받아 적어 둠
         const send = response.send.bind(response);
@@ -361,8 +384,7 @@ function cachedList(key, stampOf, fileOf, withSource = false) {
                 if (Array.isArray(value) && response.statusCode === 200) {
                     addPreviewFields(value, (item) => fileOf(request, item), withSource);
                     const json = JSON.stringify(value);
-                    if (chatMemo.size > 400) chatMemo.clear();
-                    chatMemo.set(memoKey, { stamp, json });
+                    if (memo) { if (chatMemo.size > 400) chatMemo.clear(); chatMemo.set(memoKey, { stamp, json }); }
                     return response.type('application/json').send(json);
                 }
             } catch (e) { console.warn(`${TAG} 채팅 목록 기억 실패 — ${e.message}`); }
@@ -373,12 +395,15 @@ function cachedList(key, stampOf, fileOf, withSource = false) {
 }
 
 async function setupChats() {
-    status.chat_cache = wanted('chat_cache') ? 'on' : 'off';
-    if (!wanted('chat_cache')) return;
+    // 이 기능을 꺼도 채팅 목록 응답에 미리보기 칸(마지막 글 등)은 붙임: 화면 쪽 채팅 목록 미리보기 · 채팅 파일 관리 창이 그 칸을 씀.
+    // 끄면 '바뀌지 않았으면 기억해 둔 응답 다시 쓰기'만 안 함
+    const memo = wanted('chat_cache');
+    status.chat_cache = memo ? 'on' : 'off';
+    const fail = (why) => { if (memo) rest('chat_cache', why); else console.warn(`${TAG} 채팅 목록 미리보기 칸을 못 붙임 — ${why}`); };
     let chatsRouter, charactersRouter;
-    try { chatsRouter = (await load('src/endpoints/chats.js')).router; charactersRouter = (await load('src/endpoints/characters.js')).router; } catch (e) { return rest('chat_cache', `본체 모듈을 못 읽음(${e.message})`); }
+    try { chatsRouter = (await load('src/endpoints/chats.js')).router; charactersRouter = (await load('src/endpoints/characters.js')).router; } catch (e) { return fail(`본체 모듈을 못 읽음(${e.message})`); }
     const has = (router, p) => router?.stack?.some(l => l.route?.path === p && l.route.methods?.post);
-    if (!has(chatsRouter, '/recent') || !has(charactersRouter, '/chats')) return rest('chat_cache', '채팅 목록 처리기를 못 찾음');
+    if (!has(chatsRouter, '/recent') || !has(charactersRouter, '/chats')) return fail('채팅 목록 처리기를 못 찾음');
 
     const charDir = (request, avatar) => path.join(request.user.directories.chats, String(avatar || '').replace('.png', ''));
     // 최근 채팅: 모든 캐릭터 채팅 폴더 + 그룹 채팅 + 그룹 정의 + 캐릭터 목록
@@ -390,12 +415,12 @@ async function setupChats() {
         return out;
     }, (request, item) => (item.group
         ? path.join(request.user.directories.groupChats, item.file_name)
-        : item.avatar ? path.join(charDir(request, item.avatar), item.file_name) : path.join(request.user.directories.chats, item.file_name)))));
+        : item.avatar ? path.join(charDir(request, item.avatar), item.file_name) : path.join(request.user.directories.chats, item.file_name)), false, memo)));
     // 캐릭터 채팅 목록: 그 캐릭터 폴더만
     putFirst(charactersRouter, makeLayer('post', '/chats', cachedList('chats', (request) => {
         if (!request.body?.avatar_url) throw new Error('no avatar');
         return folderStamp(charDir(request, request.body.avatar_url), '.jsonl');
-    }, (request, item) => path.join(charDir(request, request.body.avatar_url), item.file_name))));
+    }, (request, item) => path.join(charDir(request, request.body.avatar_url), item.file_name), false, memo)));
     // 채팅 파일 관리 창(찾기): 그 캐릭터 폴더 또는 그룹 채팅 폴더. 항목의 file_name 은 확장자 없는 이름
     if (has(chatsRouter, '/search')) putFirst(chatsRouter, makeLayer('post', '/search', cachedList('search', (request) => {
         const d = request.user.directories;
@@ -404,7 +429,7 @@ async function setupChats() {
         return folderStamp(charDir(request, request.body.avatar_url), '.jsonl');
     }, (request, item) => (request.body?.group_id
         ? path.join(request.user.directories.groupChats, `${item.file_name}.jsonl`)
-        : path.join(charDir(request, request.body.avatar_url), `${item.file_name}.jsonl`)), true)));
+        : path.join(charDir(request, request.body.avatar_url), `${item.file_name}.jsonl`)), true, memo)));
 }
 
 // ───────── 앱 전체에 걸치는 것: 압축 · 브라우저로 가는 파일 ─────────
@@ -427,23 +452,40 @@ const isSameMachine = (req) => {
 };
 
 const patchedFiles = new Map();   // url → { stamp, text }
-function patchedText(patch) {
-    const file = path.join(ROOT, 'public', patch.url);
+// 한 파일에 여러 기능의 조각을 차례로 끼움. 기능마다 따로 맞춰 봐서, 한 기능의 자리가 안 맞아도 그 기능만 쉬고 나머지는 끼움
+const patchesFor = (url) => CLIENT_PATCHES.filter(x => x.url === url && status[x.feature] === 'on');
+// 확장 파일은 사용자 폴더에 깔린 것이 먼저(실리태번이 보내는 순서와 같게), 없으면 모두가 같이 쓰는 자리
+const THIRD_PARTY = '/scripts/extensions/third-party/';
+function fileFor(url, user) {
+    if (url.startsWith(THIRD_PARTY) && user?.directories?.extensions) {
+        const own = path.join(user.directories.extensions, url.slice(THIRD_PARTY.length));
+        if (fs.existsSync(own)) return own;
+    }
+    return path.join(ROOT, 'public', url);
+}
+function patchedText(url, user) {
+    const file = fileFor(url, user);
     const st = fs.statSync(file, { throwIfNoEntry: false });
     if (!st) return null;
     const stamp = `${st.mtimeMs}:${st.size}`;
-    const hit = patchedFiles.get(patch.url);
+    const hit = patchedFiles.get(file);
     if (hit && hit.stamp === stamp) return hit.text;
-    let text = fs.readFileSync(file, 'utf8');
-    for (const step of patch.steps) {
-        if (!text.includes(step.find)) {
-            if (status[patch.feature] === 'on') rest(patch.feature, `${patch.url} 에 끼울 자리가 없음(이미 고쳐져 있거나 코드가 바뀜)`);
-            text = null;
-            break;
+    let text = fs.readFileSync(file, 'utf8'), changed = false;
+    // 끼울 자리 글은 줄바꿈이 \n 인데, Windows 에서 받은 파일은 \r\n 이라 한 곳도 안 맞았음 → 찾기 전에 \n 으로 맞춤(브라우저에겐 같은 코드)
+    if (text.includes('\r\n')) text = text.replace(/\r\n/g, '\n');
+    for (const patch of patchesFor(url)) {
+        let t = text, ok = true;
+        for (const step of patch.steps) {
+            // apply: 글자 그대로가 아니라 코드 모양으로 자리를 찾는 조각(압축돼서 판마다 이름이 바뀌는 파일용). 못 찾으면 null
+            if (step.apply) { const out = step.apply(t); if (out == null) { ok = false; break; } t = out; continue; }
+            if (!t.includes(step.find)) { ok = false; break; }
+            t = t.replace(step.find, () => step.replace);
         }
-        text = text.replace(step.find, () => step.replace);
+        if (ok) { text = t; changed = true; }
+        else rest(patch.feature, `${url} 에 끼울 자리가 없음(이미 고쳐져 있거나 코드가 바뀜)`);
     }
-    patchedFiles.set(patch.url, { stamp, text });
+    text = changed ? text : null;
+    patchedFiles.set(file, { stamp, text });
     return text;
 }
 
@@ -477,8 +519,12 @@ function setupApp(app) {
     status.tab_icon = wanted('tab_icon') ? 'on' : 'off';
     const TAB_ICON = /^(favicon\.ico|apple-icon-\d+x\d+\.png)$/;
     status.loading_screen = wanted('loading_screen') ? 'on' : 'off';
+    status.light_chat_open = wanted('light_chat_open') ? 'on' : 'off';
+    status.early_message_frames = wanted('early_message_frames') ? 'on' : 'off';
+    status.settings_once = wanted('settings_once') ? 'on' : 'off';
+    status.near_message_frames = wanted('near_message_frames') ? 'on' : 'off';
     const patches = CLIENT_PATCHES.filter(p => status[p.feature] === 'on');
-    for (const p of patches) patchedText(p);   // 켤 때 한 번 맞춰 보고 안 맞으면 알림
+    for (const url of new Set(patches.map(p => p.url))) patchedText(url);   // 켤 때 한 번 맞춰 보고 안 맞으면 알림
 
     const serve = (req, res, next) => {
         if (req.method !== 'GET' && req.method !== 'HEAD') return next();
@@ -491,7 +537,7 @@ function setupApp(app) {
         }
         if (p === '/css/user.css' && status.loading_screen === 'on') {
             const splash = req.user?.directories?.files && path.join(req.user.directories.files, 'breeze-splash.css');
-            if (splash && fs.existsSync(splash)) {
+            if (splash && fs.existsSync(splash) && breezeInstalled(req.user)) {
                 const userCss = path.join(globalThis.DATA_ROOT || path.join(ROOT, 'data'), '_css', 'user.css');
                 const own = fs.existsSync(userCss) ? fs.readFileSync(userCss, 'utf8') : '';
                 const line = '@import url("/user/files/breeze-splash.css");';
@@ -506,10 +552,9 @@ function setupApp(app) {
             }
             return next();
         }
-        const patch = patches.find(x => x.url === p && status[x.feature] === 'on');
-        if (!patch) return next();
+        if (!patches.some(x => x.url === p && status[x.feature] === 'on')) return next();
         let text = null;
-        try { text = patchedText(patch); } catch { /* 원본으로 */ }
+        try { text = patchedText(p, req.user); } catch { /* 원본으로 */ }
         if (text === null) return next();
         res.set('Cache-Control', 'no-cache');
         res.type('application/javascript').send(text);
@@ -517,7 +562,7 @@ function setupApp(app) {
     // 로딩 화면 CSS 는 사용자 CSS 단계보다, 나머지는 정적 파일 단계보다 앞에 있어야 함(사용자 CSS 단계가 더 앞이라 한 겹으로 충분)
     const layer = makeLayer(null, null, serve);
     if (!insertBefore('userCssMiddleware', layer) && !insertBefore('serveStatic', layer)) {
-        for (const f of ['regex_hook', 'tab_icon', 'loading_screen']) if (status[f] === 'on') rest(f, '정적 파일 단계를 못 찾음');
+        for (const f of ['regex_hook', 'tab_icon', 'loading_screen', 'light_chat_open', 'early_message_frames', 'near_message_frames', 'settings_once']) if (status[f] === 'on') rest(f, '정적 파일 단계를 못 찾음');
         if (status.lazy_load === 'on') rest('lazy_load', '정적 파일 단계를 못 찾음');
     }
 }

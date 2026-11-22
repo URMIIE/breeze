@@ -251,6 +251,16 @@ async function linked() {
 
 // 스타일시트를 한 번 훑음(@import 로 읽은 것까지). 다른 출처라 못 여는 시트는 건너뜀
 // staticOnly: css/user.css 로 함께 읽히는 것만(실리태번이 켜지는 순간부터 있는 것) — 확장이 나중에 붙이는 스타일은 켜지는 순간엔 없어서 섞이지 않음
+// 규칙이 지금 화면에 실제로 먹는지: 그 규칙의 선택자에서 #preloader 를 몰래 붙인 빈 칸으로 바꿔 맞춰 봄.
+// (다른 확장이 '자기 테마를 켰을 때만'(body 에 클래스가 있을 때만) 로딩 화면을 바꾸는 규칙도 있는데, 규칙이 있다는 것만 보고 쉬었더니
+//  그 테마를 꺼 둔 사람도 로딩 도중 이 화면이 꺼져 실리태번 기본 화면이 보였음)
+function applies(selector) {
+    const probe = document.createElement('div');
+    probe.id = 'etk-splash-probe'; probe.hidden = true;
+    document.body.prepend(probe);
+    try { return selector.split(',').some(one => one.includes('#preloader') && (() => { try { return probe.matches(one.replace(/#preloader\b/g, '#etk-splash-probe').replace(/::?(before|after|backdrop)\b.*$/, '')); } catch { return true; } })()); }
+    finally { probe.remove(); }
+}
 function findOtherSplash(staticOnly = false) {
     const scan = (sheet, depth = 0) => {
         if (depth > 4) return false;
@@ -262,7 +272,7 @@ function findOtherSplash(staticOnly = false) {
             for (const r of list) {
                 if (r.styleSheet) { if (scan(r.styleSheet, depth + 1)) return true; continue; }
                 if (r.cssRules && !r.selectorText && walk(r.cssRules)) return true;   // @media · @supports 안
-                if (r.selectorText && r.selectorText.includes('#preloader') && sheet.ownerNode?.id !== 'custom-style') { otherSheet = sheet; return true; }
+                if (r.selectorText && r.selectorText.includes('#preloader') && sheet.ownerNode?.id !== 'custom-style' && (staticOnly || applies(r.selectorText))) { otherSheet = sheet; return true; }
             }
             return false;
         };

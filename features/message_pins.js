@@ -85,9 +85,17 @@ function unplace(row, extra, keep = []) {
 // 잰 결과는 3초 동안 다시 씀 — 채팅을 열 때 메시지 · 버튼이 붙을 때마다 다시 재면, 잴 때마다 브라우저가 화면 전체 모양을 다시 계산해 0.1초 가까이 썼음.
 // 어떤 버튼을 숨기는지는 다른 확장 · 테마의 CSS 가 정하는 것이라 몇 초 사이엔 안 바뀜
 let hiddenMemo = { at: 0, keys: '', value: new Set() };
+// 3초가 지나면 다시 재던 것도 채팅을 열 때마다 화면 전체 계산(한 번에 30ms 쯤)을 치렀음 → 한 번 잰 결과는 계속 쓰고, 다시 재기는 화면이 한가할 때 뒤에서
+let remeasure = 0;
 function hiddenKinds(keys) {
     const sig = keys.join(' ');
-    if (hiddenMemo.keys === sig && Date.now() - hiddenMemo.at < 3000 && hiddenMemo.found) return hiddenMemo.value;
+    if (hiddenMemo.keys === sig && hiddenMemo.found) {
+        if (Date.now() - hiddenMemo.at > 3000 && !remeasure) {
+            const idle = window.requestIdleCallback || ((f) => setTimeout(f, 300));
+            remeasure = idle(() => { remeasure = 0; const before = [...hiddenMemo.value].join(' '); hiddenMemo.found = false; const now = hiddenKinds(keys); if ([...now].join(' ') !== before) placeAll(); }, { timeout: 2000 });
+        }
+        return hiddenMemo.value;
+    }
     const hidden = new Set();
     let found = false;
     for (const key of keys) {

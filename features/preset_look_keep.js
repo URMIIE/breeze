@@ -41,7 +41,15 @@ function isAllowed(name) {
 }
 
 /** 프리셋 파일(불러온 값)에 든 정규식. 지금 프리셋은 고친 값이 반영된 실제 값. */
+// 프리셋 정규식 목록도 한 번에 이어지는 호출 안에서는 이름마다 한 번만(지금 프리셋 이름을 화면에서 찾는 게 느려 메시지마다 하면 채팅 열기가 100ms 넘게 늘었음)
+let presetScriptsCache = null;
 function presetScripts(name) {
+    if (!presetScriptsCache) { presetScriptsCache = new Map(); setTimeout(() => { presetScriptsCache = null; }, 0); }
+    const k = nfc(name || '');
+    if (!presetScriptsCache.has(k)) presetScriptsCache.set(k, presetScriptsRaw(name));
+    return presetScriptsCache.get(k);
+}
+function presetScriptsRaw(name) {
     const pm = manager();
     if (!pm || !name) return null;
     if (nfc(name) === nfc(currentPreset())) {
@@ -234,7 +242,7 @@ const SETS_KEY = 'breeze_regex_sets';
 const setCache = new Map();   // 묶음 이름 → { on: Set, off: Set }
 function snapshotNow() {
     const on = [], off = [], names = [];
-    for (const s of engine.getRegexScripts({ allowedOnly: true })) if (s?.id) { (s.disabled ? off : on).push(s.id); if (!s.disabled && s.scriptName) names.push(s.scriptName); }
+    for (const s of allowedScripts()) if (s?.id) { (s.disabled ? off : on).push(s.id); if (!s.disabled && s.scriptName) names.push(s.scriptName); }
     on.sort(); off.sort(); names.sort();
     const key = getStringHash(JSON.stringify([on, off])).toString(36);
     chat_metadata[SETS_KEY] ??= {};
@@ -266,14 +274,21 @@ function withSnapshot(i, list) {
     return changed ? out : null;
 }
 
+// 켜진 정규식 목록: 실리태번이 줄 때마다 지금 프리셋 이름을 화면에서 찾아(jQuery) 느려서, 한 번에 이어지는 호출(채팅을 열 때 메시지마다)은 한 번만 받아 씀
+let allowedCache = null;
+function allowedScripts() {
+    if (!allowedCache) { allowedCache = engine.getRegexScripts({ allowedOnly: true }); setTimeout(() => { allowedCache = null; }, 0); }
+    return allowedCache;
+}
+
 /** 다른 확장(번역기 문단 짝)용: 그 메시지를 실제로 그리는 목록 + 다른 프리셋 블록 자리 */
 function displayScriptsFor(i) {
     const base = scriptsFor(i);
     const m = chat[i];
     if (!m || m.is_user) return base;
     const name = baseName(i);
-    const snap = withSnapshot(i, base ?? engine.getRegexScripts({ allowedOnly: true }));
-    const list = snap ?? base ?? engine.getRegexScripts({ allowedOnly: true });
+    const snap = withSnapshot(i, base ?? allowedScripts());
+    const list = snap ?? base ?? allowedScripts();
     const tags = foreignTags(m.mes, name);
     const taken = [];
     if (tags.size) foreignRenders(m.mes, name, taken);
@@ -621,7 +636,7 @@ function withLooks(i, list) {
 }
 function recordLooks(id, m) {
     try {
-        const list = scriptsFor(id) ?? engine.getRegexScripts({ allowedOnly: true });   // regex_preset 을 먼저 적으므로 그 프리셋 목록
+        const list = scriptsFor(id) ?? allowedScripts();   // regex_preset 을 먼저 적으므로 그 프리셋 목록
         const ids = looksOf(String(m.mes ?? ''), list, chat.length - 1 - id);
         if (ids.length) m.extra[LOOKS_KEY] = ids; else delete m.extra[LOOKS_KEY];
         return ids;

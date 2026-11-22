@@ -90,7 +90,7 @@ function wrapperCode(rule) {
     // 글 안의 </script> 가 스크립트를 담는 칸의 태그를 닫아 버리지 않게 </ 를 <\\/ 로
     const j = (v) => JSON.stringify(String(v || '')).replace(/<\//g, '<\\/');
     return `${TH_MARK}
-/* ${String(rule.name).replace(/\*\//g, '* /')}: breeze ‘테마 스크립트 자동 켜기’가 조건이 맞을 때만 켜고 끔 */
+/* ${String(rule.name).replace(/\*\//g, '* /')}: breeze ‘테마별 스크립트’가 조건이 맞을 때만 켜고 끔 */
 const NAME = ${j(rule.name)};
 const CSS = ${j(rule.css)};
 const JS = ${j(rule.js)};
@@ -137,7 +137,7 @@ async function moveToHelper(rule) {
     if (own) await th.updateScriptTreesWith(t => t.map(update), { type: 'global' });
     else {
         const id = crypto.randomUUID();
-        const script = { type: 'script', enabled: false, name: rule.name, id, content, info: `${rule.name}: breeze ‘테마 스크립트 자동 켜기’가 조건이 맞을 때만 켜요.`, button: { enabled: true, buttons: [] }, data: {}, export_with: { data: true, button: true } };
+        const script = { type: 'script', enabled: false, name: rule.name, id, content, info: `${rule.name}: breeze ‘테마별 스크립트’가 조건이 맞을 때만 켜요.`, button: { enabled: true, buttons: [] }, data: {}, export_with: { data: true, button: true } };
         await th.updateScriptTreesWith(t => [...t, script], { type: 'global' });
         rule.thOwn = id;
     }
@@ -275,7 +275,7 @@ async function editRule(rule) {
                 <label>CSS<textarea class="text_pole" rows="4" data-k="css"></textarea></label>
             </details>
         </div>
-        <div class="etk-ts-step"><b>3. 이 스크립트를 부를 이름</b><small>breeze 설정의 ‘테마 스크립트 자동 켜기’ 목록에 이 이름으로 보여요. 비우면 테마 이름을 써요.</small><input class="text_pole" data-k="name" placeholder="예: 날씨 위젯"></div>
+        <div class="etk-ts-step"><b>3. 이 스크립트를 부를 이름</b><small>breeze 설정의 ‘테마별 스크립트’ 목록에 이 이름으로 보여요. 비우면 테마 이름을 써요.</small><input class="text_pole" data-k="name" placeholder="예: 날씨 위젯"></div>
         <input type="hidden" data-k="when"><input type="hidden" data-k="value"><input type="hidden" data-k="cleanupName"><input type="hidden" data-k="watch">`;
     addMaximize(box);
     const f = k => box.querySelector(`[data-k="${k}"]`);

@@ -9,11 +9,14 @@
 // deleteWorldInfoEntry)로 해서 다른 정리 도구와 같은 파일을 봄. 연결 바꾸기 · 중복 · 백업 같은 정리는 다른 도구에 맡기고 넣지 않음.
 import { world_names, selected_world_info, world_info, loadWorldInfo, saveWorldInfo, reloadEditor, moveWorldInfoEntry, deleteWorldInfoEntry, METADATA_KEY } from '../../../../world-info.js';
 import { accountStorage } from '../../../../util/AccountStorage.js';
+import { start as lightStart, stop as lightStop } from './light_worldinfo.js';   // 한 쪽에 항목을 전부 넣으므로 화면 밖 항목을 안 그리는 받침이 꼭 필요(그 기능을 따로 꺼 두어도 여기서 켬)
 import { chat_metadata } from '../../../../../script.js';
 import { power_user } from '../../../../power-user.js';
 
+// 즐겨찾기: 줄의 별을 누른 월드인포는 두 보기(연결별 · 내 폴더) 모두 맨 위 '즐겨찾기'에 늘 보임(원래 폴더에도 그대로 있음)
+const FAV = '::fav';
 const PER_PAGE_KEY = 'WI_PerPage', PREV_KEY = 'breeze_WI_PerPage_before';
-let api = null, offs = [], listObserver = null, split = null, side = null, bar = null, decorating = false, decoTimer = 0;
+let api = null, offs = [], listObserver = null, side = null, bar = null, decorating = false, decoTimer = 0;
 // 좁은 창의 '월드인포 고르기' 칸을 펼친 채 닫아도 다시 열면(새로고침 포함) 늘 접혀 있었음 → 이 기기에 펼침 상태를 적어 둠
 const SIDE_KEY = 'breeze.wiSideOpen';
 const savedSide = () => { try { return localStorage.getItem(SIDE_KEY) === '1'; } catch { return false; } };
@@ -24,7 +27,7 @@ let summary = {};
 const ctx = () => api.ctx();
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const nfc = (s) => String(s ?? '').normalize('NFC');
-const opts = () => { const o = api.options(); o.folders ??= []; o.groups ??= {}; o.autoCollapsed ??= {}; return o; };   // autoCollapsed: 연결별 폴더를 직접 접고 편 기록(누른 것만 적힘), 기록 없는 폴더는 펼침
+const opts = () => { const o = api.options(); o.folders ??= []; o.groups ??= {}; o.autoCollapsed ??= {}; o.favs ??= []; return o; };   // autoCollapsed: 연결별 폴더를 직접 접고 편 기록(누른 것만 적힘), 기록 없는 폴더는 펼침
 const newId = () => Math.random().toString(36).slice(2, 10);
 const fmt = (n) => (n >= 10000 ? `${(n / 10000).toFixed(1).replace(/\.0$/, '')}만` : n >= 1000 ? n.toLocaleString() : String(n));
 const narrow = () => document.getElementById('WorldInfo')?.classList.contains('etk-wip-narrow');
@@ -160,7 +163,7 @@ function focusFolderName() {
 let dragBook = null;
 function onBookPointerDown(e) {
     const row = e.target.closest?.('.etk-wip-book');
-    if (!row || viewOf(opts()) !== 'mine' || ui.pickBooks || e.button > 0) return;
+    if (!row || viewOf(opts()) !== 'mine' || ui.pickBooks || e.button > 0 || e.target.closest('.etk-wip-star') || row.closest(`[data-auto="${FAV}"]`)) return;
     const sx = e.clientX, sy = e.clientY, touch = e.pointerType !== 'mouse';
     let started = false, timer = 0, ghost = null, over = null;
     const begin = () => {
@@ -194,7 +197,8 @@ function onBookPointerDown(e) {
     const up = () => {
         if (started) {
             const o = opts(), n = row.dataset.book, to = over?.dataset.folder;
-            if (over && !over.dataset.auto) {
+            if (over?.dataset.auto === FAV) { if (!o.favs.includes(n)) { o.favs.push(n); api.save(); } }
+            else if (over && !over.dataset.auto) {
                 for (const f of o.folders) f.books = f.books.filter(x => x !== n);
                 // 그 폴더에서 보이는 순서대로 다시 적고 놓은 자리에 끼움('폴더 없음'도 순서를 따로 기억)
                 const shownOrder = [...over.querySelectorAll('.etk-wip-book')].map(x => x.dataset.book).filter(x => x !== n);
@@ -249,13 +253,13 @@ function renderSide() {
             : globalSet.has(n) ? '<span class="etk-wip-where">모든 채팅</span>' : chatBook === n ? '<span class="etk-wip-where">이 채팅</span>' : personaBooks.has(n) ? '<span class="etk-wip-where">페르소나</span>' : '';
         const tok = bookTokOf(n);
         const meta = s ? `<span class="etk-wip-bmeta">켜짐 ${s.enabled} / ${s.entries}<span class="etk-wip-tokn">${tok != null ? ` · ${kTok(tok)} 토큰` : ''}</span></span>` : '';
-        return `<div class="etk-wip-book${on ? ' etk-on' : ''}${picked ? ' etk-picked' : ''}" data-book="${esc(n)}" tabindex="0">${ui.pickBooks ? `<input type="checkbox" tabindex="-1"${picked ? ' checked' : ''}>` : ''}<span class="etk-wip-bcol"><span class="etk-wip-bname">${esc(n)}</span>${where || meta ? `<span class="etk-wip-bsub">${where}${meta}</span>` : ''}</span></div>`;
+        return `<div class="etk-wip-book${on ? ' etk-on' : ''}${picked ? ' etk-picked' : ''}" data-book="${esc(n)}" tabindex="0">${ui.pickBooks ? `<input type="checkbox" tabindex="-1"${picked ? ' checked' : ''}>` : ''}<span class="etk-wip-bcol"><span class="etk-wip-bname">${esc(n)}</span>${where || meta ? `<span class="etk-wip-bsub">${where}${meta}</span>` : ''}</span>${ui.pickBooks ? '' : `<i class="etk-wip-star fa-star ${o.favs.includes(n) ? 'fa-solid etk-on' : 'fa-regular'} interactable" tabindex="0" title="${o.favs.includes(n) ? '즐겨찾기에서 빼기' : '즐겨찾기(맨 위에 늘 보임)'}"></i>`}</div>`;
     };
     const folder = (f, books, real, auto, sub) => {
         const shown = books.filter(n => show(n) || (sub?.get(n) || []).some(show));
         if (q && !shown.length) return '';
-        const open = q || !f.collapsed || books.includes(cur);
-        return `<div class="etk-wip-folder" data-folder="${real ? esc(f.id) : ''}"${auto ? ` data-auto="${esc(auto)}"` : ''}><div class="etk-wip-fhead" tabindex="0"><i class="fa-solid fa-chevron-${open ? 'down' : 'right'}"></i>${ui.pickBooks && shown.length ? `<input type="checkbox" class="etk-wip-fall" tabindex="-1" title="이 폴더 전부"${shown.every(n => ui.pickedBooks.has(n)) ? ' checked' : ''}>` : ''}${real && ui.editFolder === f.id ? `<input class="text_pole etk-wip-fname" value="${esc(f.name)}" maxlength="40">` : `<span>${esc(f.name)}</span>`}<small>${books.length}</small>${real && !ui.pickBooks ? '<i class="fa-solid fa-pencil etk-wip-frename" title="폴더 이름 바꾸기"></i><i class="fa-solid fa-trash-can etk-wip-fdel" title="폴더 지우기(월드인포는 그대로)"></i>' : ''}</div>${open ? shown.map(n => bookRow(n, sub)).join('') : ''}</div>`;
+        const open = q || !f.collapsed || (auto !== FAV && books.includes(cur));
+        return `<div class="etk-wip-folder" data-folder="${real ? esc(f.id) : ''}"${auto ? ` data-auto="${esc(auto)}"` : ''}><div class="etk-wip-fhead" tabindex="0"><i class="fa-solid fa-chevron-${open ? 'down' : 'right'}"></i>${ui.pickBooks && shown.length ? `<input type="checkbox" class="etk-wip-fall" tabindex="-1" title="이 폴더 전부"${shown.every(n => ui.pickedBooks.has(n)) ? ' checked' : ''}>` : ''}${real && ui.editFolder === f.id ? `<input class="text_pole etk-wip-fname" value="${esc(f.name)}" maxlength="40">` : `<span>${auto === FAV ? '<i class="fa-solid fa-star etk-wip-favstar"></i>' : ''}${esc(f.name)}</span>`}<small>${books.length}</small>${real && !ui.pickBooks ? '<i class="fa-solid fa-pencil etk-wip-frename" title="폴더 이름 바꾸기"></i><i class="fa-solid fa-trash-can etk-wip-fdel" title="폴더 지우기(월드인포는 그대로)"></i>' : ''}</div>${open ? shown.map(n => bookRow(n, sub)).join('') : ''}</div>`;
     };
     const view = viewOf(o);
     let tree;
@@ -266,6 +270,9 @@ function renderSide() {
         const loose = names.filter(n => !inFolder.has(n)).map((n, i) => [n, i]).sort((x, y) => (lr.get(x[0]) ?? 1e9) - (lr.get(y[0]) ?? 1e9) || x[1] - y[1]).map(x => x[0]);   // '폴더 없음'도 끌어서 정한 순서(새로 생긴 건 뒤)
         tree = o.folders.map(f => folder(f, f.books, true)).join('') + folder({ name: '폴더 없음', collapsed: o.looseCollapsed }, loose, false);
     }
+    // 즐겨찾기 묶음(별을 누른 순서대로). 지워진 월드인포는 빼고, 하나도 없으면 묶음도 없음
+    o.favs = o.favs.filter(n => names.includes(n));
+    if (o.favs.length) tree = folder({ name: '즐겨찾기', collapsed: o.autoCollapsed[FAV] ?? false }, o.favs, false, FAV) + tree;
     side.querySelectorAll('.etk-wip-view').forEach(b => b.classList.toggle('etk-on', b.dataset.view === view));
     // 폴더로 옮기기 · 끝내기는 아래 줄에(검색칸 옆에 두니 글자 길이대로 검색칸 폭이 바뀌었음)
     let foot = side.querySelector('.etk-wip-sidefoot');
@@ -307,6 +314,28 @@ function addAdvButton(row) {
     const recur = edit.querySelector('input[name="excludeRecursion"]')?.closest('label')?.parentElement?.parentElement;
     if (recur && !recur.classList.contains('etk-wip-recur')) { recur.classList.add('etk-wip-recur'); ab.after(recur); }
 }
+// 테마가 항목 머리 줄을 따로 상자(바탕 · 테두리 · 아래 여백)로 꾸미면, 실리태번 항목 상자 안에 상자가 하나 더 생기고
+// 그 아래 여백 때문에 안쪽 상자 아래만 넓었음 → 그런 테마일 때만(etk-wip-boxhead) 안쪽 상자를 사방 같은 간격으로. 꾸미지 않는 테마는 그대로.
+// 첫 항목 머리 줄 하나만 보고 정함. 계산된 스타일을 읽으면 화면 계산을 그 자리에서 한 번 치러서(재 보니 20~45ms),
+// 목록을 그릴 때마다 하지 않고 처음 한 번과 테마 CSS(사용자 CSS)가 바뀔 때만, 그것도 한가할 때
+let headJudged = false;
+const judgeLater = () => (window.requestIdleCallback ? requestIdleCallback(judgeHeadBox, { timeout: 1500 }) : setTimeout(judgeHeadBox, 300));
+function judgeHeadBox() {
+    const wi = document.getElementById('WorldInfo');
+    const head = list()?.querySelector('.world_entry .world_entry_form > .inline-drawer > .inline-drawer-header');
+    if (!wi || !head) return;
+    headJudged = true;
+    // 우리 표시를 뗀 모양으로 판정: 붙인 채로 다시 보면 우리가 넣은 여백을 테마 것으로 읽어 표시를 도로 떼었음(테마 CSS 가 한 번 더 바뀌면 열 때마다 모양이 달랐음)
+    wi.classList.remove('etk-wip-boxhead', 'etk-wip-boxpop');
+    const cs = getComputedStyle(head);
+    const seen = (c) => { const m = c.match(/rgba?\(([^)]+)\)/); if (!m) return false; const p = m[1].split(/[ ,/]+/).filter(Boolean); return p.length < 4 || Number(p[3]) > 0.05; };
+    const boxed = seen(cs.backgroundColor) || (parseFloat(cs.borderTopWidth) >= 1 && seen(cs.borderTopColor) && cs.borderTopStyle !== 'none') || parseFloat(cs.marginBottom) >= 4;
+    wi.classList.toggle('etk-wip-boxhead', boxed);
+    // 항목 목록 칸(#world_popup)도 테마가 테두리 · 바탕을 칠하고 안쪽 여백은 0이면 찾기 칸 · 항목 상자가 테두리에 붙음 → 그때만 안쪽 여백
+    const pop = document.getElementById('world_popup');
+    if (pop) { const p = getComputedStyle(pop); wi.classList.toggle('etk-wip-boxpop', ((parseFloat(p.borderTopWidth) >= 1 && p.borderTopStyle !== 'none' && seen(p.borderTopColor)) || seen(p.backgroundColor)) && parseFloat(p.paddingLeft) < 4); }
+}
+
 async function decorate() {
     const l = list(), book = currentBook();
     if (!l || !bar) return;
@@ -315,6 +344,7 @@ async function decorate() {
     const data = await loadWorldInfo(book);
     if (!data || currentBook() !== book) return;
     decorating = true;
+    if (!headJudged) judgeLater();
     try {
         const o = opts(), entries = Object.values(data.entries || {});
         const g = (o.groups[book] ??= { list: [], of: {} });
@@ -488,6 +518,8 @@ async function onSideClick(e) {
         ui.pickBooks = false; ui.pickedBooks.clear(); o.view = 'mine'; api.save();
         return renderSide();
     }
+    const star = hit('.etk-wip-star');
+    if (star) { const n = star.closest('.etk-wip-book').dataset.book; o.favs = o.favs.includes(n) ? o.favs.filter(x => x !== n) : [...o.favs, n]; api.save(); return renderSide(); }
     const folder = hit('.etk-wip-folder');
     if (hit('.etk-wip-fname')) return;   // 이름 고치는 칸 안 누르기는 그대로
     if (hit('.etk-wip-frename')) { ui.editFolder = folder.dataset.folder; renderSide(); focusFolderName(); return; }
@@ -505,7 +537,7 @@ async function onSideClick(e) {
         const id = folder.dataset.folder, auto = folder.dataset.auto;
         // 지금 고른 월드인포가 든 폴더를 누르면 고르기를 풀고 접음(그 폴더는 고른 월드인포 때문에 늘 펼쳐져 있어 접을 수 없었음)
         const cur = currentBook();
-        if (cur && folder.querySelector(`.etk-wip-book.etk-on`)) {
+        if (cur && auto !== FAV && folder.querySelector(`.etk-wip-book.etk-on`)) {
             if (auto) o.autoCollapsed[auto] = true; else if (id) o.folders.find(x => x.id === id).collapsed = true; else o.looseCollapsed = true;
             api.save(); ui.query = ''; ui.chip = 'all'; ui.selecting = false; ui.picked.clear();
             $('#world_editor_select').val('').trigger('change');
@@ -584,16 +616,18 @@ export function start(a) {
     // 좁은 창 배치는 화면 폭이 아니라 월드인포 창 폭으로(테마에 따라 PC 에서도 창이 좁음). 크기 감시는 화면 배치를 바꾸지 않음
     const holder = document.getElementById('wi-holder');
     if (holder) {
-        const ro = new ResizeObserver(() => { const w = holder.clientWidth; if (!w) return; const wi = document.getElementById('WorldInfo'); const was = wi.classList.contains('etk-wip-narrow'); const now = was ? w <= 790 : w <= 760; if (now !== was) { wi.classList.toggle('etk-wip-narrow', now); renderSide(); } });
+        // 760 이하면 좁게 · 790 넘으면 넓게, 그 사이는 그대로(스크롤 막대가 생기고 없어지며 모양이 깜빡이지 않게).
+        // 다만 테마를 바꿔 폭이 크게 달라졌을 때도 그 사이면 예전 모양이 남아, 같은 폭인데 새로고침하면 다르게 보였음 → 지난 판정 때보다 40px 넘게 바뀌면 775 하나로 새로 정함
+        let judgedAt = 0;
+        const ro = new ResizeObserver(() => { const w = holder.clientWidth; if (!w) return; const wi = document.getElementById('WorldInfo'); const was = wi.classList.contains('etk-wip-narrow'); const now = Math.abs(w - judgedAt) > 40 ? w <= 775 : was ? w <= 790 : w <= 760; judgedAt = Math.abs(w - judgedAt) > 40 ? w : judgedAt; if (now !== was) { wi.classList.toggle('etk-wip-narrow', now); judgedAt = w; renderSide(); } });
         ro.observe(holder); offs.push(() => ro.disconnect());
     }
-    // 왼쪽 칸 + 실리태번 편집 칸을 나란히(편집 칸을 옮겨 담고, 끄면 제자리로)
-    split = document.createElement('div');
-    split.className = 'etk-wip-split';
+    // 왼쪽 칸 + 실리태번 편집 칸을 나란히. 편집 칸은 옮기지 않음(예전엔 우리 틀 안으로 옮겨 담아, 그 칸의 자리를 보고 꾸미는 테마 · 스크립트와 어긋날 수 있었음)
+    // → 왼쪽 칸만 편집 칸 앞에 끼우고, 둘을 품은 실리태번 칸(#wi-holder)을 CSS 로 가로 배치
     side = document.createElement('div');
     side.className = 'etk-wip-side';
-    popupEl.before(split);
-    split.append(side, popupEl);
+    popupEl.before(side);
+    lightStart(a); offs.push(lightStop);
     side.addEventListener('click', onSideClick);
     side.addEventListener('pointerdown', onBookPointerDown);
     side.addEventListener('input', (e) => { if (e.target.matches('.etk-wip-find')) renderSide(); });
@@ -646,6 +680,9 @@ export function start(a) {
     offs.push(() => document.removeEventListener('click', onOpen, true));
     offs.push(() => document.removeEventListener('click', onNew, true));
     // 월드인포를 새로 만들거나 이름을 바꾸면 고르기 칸 목록이 바뀜 → 왼쪽 칸도
+    // 테마를 바꾸면 사용자 CSS(#custom-style) 글이 바뀜 → 머리 줄 꾸밈을 다시 봄
+    const cssEl = document.getElementById('custom-style');
+    if (cssEl) { const cssWatch = new MutationObserver(() => { headJudged = false; judgeLater(); }); cssWatch.observe(cssEl, { childList: true, characterData: true, subtree: true }); offs.push(() => cssWatch.disconnect()); }
     const optWatch = new MutationObserver(() => renderSide());
     optWatch.observe(editorSelect(), { childList: true });
     offs.push(() => optWatch.disconnect());
@@ -692,9 +729,7 @@ export function stop() {
     offs.forEach(f => f()); offs = [];
     listObserver?.disconnect(); listObserver = null;
     $('#world_editor_select').off('change.etkwip');
-    const popupEl = document.getElementById('world_popup');
-    if (split && popupEl) split.after(popupEl);
-    split?.remove(); split = null; side = null;
+    side?.remove(); side = null;
     bar?.remove(); bar = null;
     const l = list();
     if (l) {
@@ -706,7 +741,7 @@ export function stop() {
         l.parentElement?.querySelector(':scope > .etk-wip-actfoot')?.remove();
         l.querySelectorAll('.world_entry').forEach(x => { x.style.order = ''; x.classList.remove('etk-wip-hide', 'etk-wip-picked'); });
     }
-    document.getElementById('WorldInfo')?.classList.remove('etk-wip', 'etk-wip-sheet', 'etk-wip-moreon', 'etk-wip-narrow');
+    document.getElementById('WorldInfo')?.classList.remove('etk-wip', 'etk-wip-sheet', 'etk-wip-moreon', 'etk-wip-narrow', 'etk-wip-boxhead', 'etk-wip-boxpop');
     const prev = accountStorage.getItem(PREV_KEY);
     if (prev !== null) { if (prev === '') accountStorage.removeItem(PER_PAGE_KEY); else accountStorage.setItem(PER_PAGE_KEY, prev); accountStorage.removeItem(PREV_KEY); }
     const b = currentBook(); if (b) reloadEditor(b);

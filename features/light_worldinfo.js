@@ -52,8 +52,10 @@ function restoreScrollHandler() {
     if (!has) $(box).on('scroll', original);
 }
 
-let api = null, onReady = null;
+// 이 기능은 목록에서 따로 켜기도 하고, '월드인포 창 정리'가 받침으로 직접 켜기도 함 → 쓰는 쪽 수를 세서 마지막이 끌 때만 멈춤
+let api = null, onReady = null, users = 0;
 export function start(a) {
+    if (users++ > 0) return;
     api = a;
     const list = document.getElementById('world_popup_entries_list');
     if (!list) return;
@@ -79,6 +81,7 @@ export function start(a) {
 }
 
 export function stop() {
+    if (users === 0 || --users > 0) return;
     observer?.disconnect(); observer = null;
     style?.remove(); style = null;
     document.getElementById('world_popup_entries_list')?.classList.remove('etk-light');

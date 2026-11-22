@@ -2,6 +2,8 @@
 // 어떤 항목이 이번 답에 들어갔는지 보려면 월드인포 창을 열어 찾아야 했다 → 답마다 이름 줄(시각 옆)에 '월드인포 n' 표시, 누르면 이번에 들어간 항목 목록.
 // 실리태번이 프롬프트를 만들 때 내는 신호(world_info_activated: 들어간 항목 전부)를 받아 두었다가, 그 생성으로 붙는 답(message_received)에 적는다
 // (메시지 extra.breeze_wi, 지금 스와이프 기록에도 → 스와이프를 넘겨도 그 답의 것). 미리 보기 계산(dry run)은 신호가 안 와서 섞이지 않음.
+// 답이 늦게 붙는 경우(채팅을 나간 사이 다른 확장이 답을 받아 나중에 채팅에 넣는 경우)를 위해, 받은 목록은 채팅 · 답 자리별로 이 기기에 적어 두고
+// 그 자리에 답이 나타나면(바로 · 다시 열 때 · 새로고침 뒤) 그 목록을 붙임. 다른 확장의 숨은 생성(quiet)도 같은 신호를 보내서 그건 받지 않음.
 // 목록의 항목을 누르면 실리태번 편집 칸에서 그 항목을 엶. 손가락 기기도 누르기만으로 됨(마우스 올리기 없음).
 import { openInEditor } from './worldinfo_library.js';
 import { itemizedPrompts } from '../../../../itemized-prompts.js';
@@ -34,7 +36,9 @@ async function restoreOld() {
             const msg = api.ctx().chat?.[id];
             const had = msg?.extra?.[KEY];
             const oldGuess = Array.isArray(had) && had.length && had.every(x => x.r && x.rv !== RV);
-            if (!msg || msg.is_user || msg.is_system || (Array.isArray(had) && !oldGuess)) continue;
+            if (!msg || msg.is_user || msg.is_system) continue;
+            if (attachStored(id)) continue;   // 늦게 붙은 답: 받아 둔 실제 목록
+            if (Array.isArray(had) && !oldGuess) continue;
             // 대조할 기록이 없으면 예전 방식으로 찾아 둔 목록은 맞는지 알 수 없어서 지움
             const drop = () => { if (!oldGuess) return; delete msg.extra[KEY]; const sw = msg.swipe_info?.[msg.swipe_id]; if (sw?.extra) delete sw.extra[KEY]; const el = document.querySelector(`#chat > .mes[mesid="${id}"]`); if (el) paint(el); };
             const set = [...(itemizedPrompts || [])].reverse().find(x => x?.mesId === id);
@@ -57,8 +61,38 @@ function queueOld() {
 }
 
 const KEY = 'breeze_wi';
+// 받아 둔 목록: { [채팅 id]: [{ id: 답 자리, list, at }] } (채팅마다 최근 5개, 채팅 30개, 3일)
+const STORE = 'breeze.wiFiredWaiting';
+function readStore() { try { return JSON.parse(localStorage.getItem(STORE) || '{}') || {}; } catch { return {}; } }
+function writeStore(st) {
+    const now = Date.now(), keep = {};
+    for (const [k, arr] of Object.entries(st)) { const a = (arr || []).filter(x => now - x.at < 3 * 864e5).slice(-5); if (a.length) keep[k] = a; }
+    const last = (k) => keep[k][keep[k].length - 1].at;
+    const names = Object.keys(keep).sort((a, b) => last(b) - last(a)).slice(0, 30);
+    try { localStorage.setItem(STORE, JSON.stringify(Object.fromEntries(names.map(n => [n, keep[n]])))); } catch { /* 저장 못 하면 메모리 것만 */ }
+}
+const chatKey = () => { try { return String(ctx().getCurrentChatId?.() ?? ''); } catch { return ''; } };
+function putRecord(id, list) {
+    const msg = ctx().chat?.[id];
+    if (!msg || msg.is_user || msg.is_system) return false;
+    msg.extra ??= {};
+    msg.extra[KEY] = list;
+    const sw = msg.swipe_info?.[msg.swipe_id];
+    if (sw) { sw.extra ??= {}; sw.extra[KEY] = list; }
+    const el = document.querySelector(`#chat > .mes[mesid="${id}"]`); if (el) paint(el);
+    return true;
+}
+// 이 채팅의 그 자리에 받아 둔 목록이 있으면 붙이고 지움
+function attachStored(id) {
+    const k = chatKey(); if (!k) return false;
+    const st = readStore(); const arr = st[k]; if (!arr) return false;
+    const i = arr.findLastIndex(x => x.id === id); if (i < 0) return false;
+    if (!putRecord(id, arr[i].list)) return false;
+    arr.splice(i, 1); st[k] = arr; writeStore(st);
+    return true;
+}
 const RV = 2;   // 예전 답 찾기 방식 판(바꾸면 예전 방식으로 찾아 둔 목록을 다시 찾음)
-let api = null, pending = null, offs = [], observer = null;
+let api = null, pending = null, offs = [], observer = null, genType = null;
 const ctx = () => api.ctx();
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -134,19 +168,26 @@ function onChatClick(e) {
 export function start(a) {
     api = a;
     const { eventSource, eventTypes } = ctx();
-    const onStart = (_type, _o, dryRun) => { if (!dryRun) pending = null; };
+    const onStart = (type, _o, dryRun) => {
+        if (dryRun) return;
+        genType = type || 'normal';
+        if (genType !== 'quiet' && genType !== 'impersonate') pending = null;
+    };
     const onFire = (entries) => {
-        pending = (entries || []).map(e => ({ w: e.world, u: e.uid, c: !!e.constant, t: String(e.comment || (e.key || []).join(', ') || '(제목 없음)').normalize('NFC') }));
+        if (genType === 'quiet' || genType === 'impersonate') return;
+        const list = (entries || []).map(e => ({ w: e.world, u: e.uid, c: !!e.constant, t: String(e.comment || (e.key || []).join(', ') || '(제목 없음)').normalize('NFC') }));
+        const len = ctx().chat?.length ?? 0;
+        // 답이 들어갈 자리: 스와이프 · 이어 쓰기는 마지막 메시지, 그 밖에는 새 메시지
+        const id = genType === 'swipe' || genType === 'continue' ? len - 1 : len;
+        pending = { chat: chatKey(), id, list };
+        const st = readStore(); const arr = (st[pending.chat] ||= []).filter(x => x.id !== id);
+        arr.push({ id, list, at: Date.now() }); st[pending.chat] = arr; writeStore(st);
     };
     const onReceived = (id) => {
-        const msg = ctx().chat?.[id];
-        if (!pending || !msg || msg.is_user || msg.is_system) return;
-        msg.extra ??= {};
-        msg.extra[KEY] = pending;
-        const sw = msg.swipe_info?.[msg.swipe_id];
-        if (sw) { sw.extra ??= {}; sw.extra[KEY] = pending; }
-        pending = null;
-        const el = document.querySelector(`#chat > .mes[mesid="${id}"]`); if (el) paint(el);
+        if (attachStored(id)) { if (pending?.id === id && pending.chat === chatKey()) pending = null; return; }
+        // 자리가 달라졌어도 방금 이 채팅에서 만든 목록이면 붙임(예전 방식)
+        if (!pending || pending.chat !== chatKey()) return;
+        if (putRecord(id, pending.list)) pending = null;
     };
     const onRendered = (id) => { const el = document.querySelector(`#chat > .mes[mesid="${id}"]`); if (el) paint(el); };
     const on = (n, fn) => { eventSource.on(n, fn); offs.push(() => eventSource.removeListener(n, fn)); };
@@ -157,7 +198,8 @@ export function start(a) {
     on(eventTypes.MESSAGE_SWIPED, onRendered);
     on(eventTypes.MESSAGE_UPDATED, onRendered);
     on(eventTypes.CHAT_CHANGED, () => { closeList(); candidates = null; restoreQueue = []; setTimeout(paintAll, 0); });
-    if (eventTypes.ITEMIZED_PROMPTS_LOADED) on(eventTypes.ITEMIZED_PROMPTS_LOADED, () => setTimeout(queueOld, 300));
+    // 예전 답 찾기(월드인포 목록을 다 훑음)는 채팅을 다 연 뒤 한가할 때(늦어도 3초)
+    if (eventTypes.ITEMIZED_PROMPTS_LOADED) on(eventTypes.ITEMIZED_PROMPTS_LOADED, () => (window.requestIdleCallback ? requestIdleCallback(queueOld, { timeout: 3000 }) : setTimeout(queueOld, 300)));
     document.getElementById('chat')?.addEventListener('click', onChatClick, true);
     // 옛 메시지를 더 불러오면(위로 굴림) 새로 붙은 메시지에도
     observer = new MutationObserver(ms => { let more = false; for (const m of ms) m.addedNodes.forEach(n => { if (n.nodeType === 1 && n.classList.contains('mes')) { paint(n); const id = Number(n.getAttribute('mesid')); if (Number.isInteger(id)) { restoreQueue.push(id); more = true; } } }); if (more) restoreOld(); });

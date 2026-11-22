@@ -7,6 +7,8 @@ import { fromStack } from '../lib/who.js';
 // 기본 소리는 브라우저가 직접 만드는 음이라 따로 받을 파일이 없고, 내 소리 파일을 고르면 그 파일을 쓴다(user/files 에 저장).
 // 다른 쪽이 이미 알림 소리를 내면 쉰다: 실리태번의 ‘메시지 소리’가 켜져 있거나, 끝난 직후 잠깐 사이에 다른 코드가 소리를 틀었으면 내지 않는다
 // (소리 재생을 한 줄 거쳐 가게 해 ‘방금 누가 틀었는지’ 시각만 적어 둠 — 지켜보는 일은 없음).
+// 오류 알림음: 답 요청이 실패하거나(429 · 500 같은 오류 응답, 연결 끊김) 빨간 오류 알림이 뜨면 따로 고른 소리(기본은 낮게 두 번).
+// 실리태번 메시지 소리는 오류엔 안 울려서 그게 켜져 있어도 울림. 요청 실패와 그 오류 알림이 같이 와도 한 번만(잠깐 사이 겹친 소리는 건너뜀).
 // 왜 울렸는지 · 안 울렸는지는 콘솔 디버그에 ‘[Breeze] 완료 소리: …’로 남긴다.
 import { saveUserFile, pickFiles, extOf } from '../lib/files.js';
 
@@ -18,6 +20,8 @@ const TONES = {
     single: { name: '짧은 한 음', notes: [[1047, 0]] },
     soft: { name: '낮은 두 음', notes: [[523, 0], [659, 0.15]] },
     rise: { name: '올라가는 세 음', notes: [[659, 0], [880, 0.12], [1175, 0.24]] },
+    low2: { name: '낮게 두 번', notes: [[392, 0], [392, 0.18]] },
+    dull: { name: '둔탁하게 내려감', notes: [[330, 0], [262, 0.16]] },
 };
 let myPlay = null;
 let lastOtherStack = '';
@@ -32,7 +36,7 @@ function mySounds() {
     if (o.tone === 'file') { if (o.url?.trim() && !o.sounds.some(x => x.url === o.url)) o.sounds.push({ name: o.url.split('/').pop(), url: o.url }); o.tone = o.url?.trim() ? `file:${o.url}` : 'chime'; delete o.url; }
     return o.sounds;
 }
-const toneOf = (key) => (key && api.options().toneFor?.[key]) || api.options().tone;
+const toneOf = (key) => (key && api.options().toneFor?.[key]) || (key === 'error' ? 'low2' : api.options().tone);
 function beep(tone) {
     const o = api.options();
     mySounds();
@@ -110,6 +114,27 @@ function notify(why = '', key = 'main') {
     }, 250);
 }
 const log = (why) => { if (why) console.debug(`[Breeze] 완료 소리: ${why}`); };
+function notifyError(why) {
+    if (!api || (api.options().otherOff || []).includes('error')) return;
+    if (api.options().onlyHidden && !quietIOS() && document.visibilityState === 'visible' && document.hasFocus()) return;
+    const at = Date.now();
+    if (at - lastError < 4000) return;   // 요청 실패 · 그 오류 알림 · 다시 시도가 잇따라 와도 한 번
+    lastError = at; lastBeep = at;
+    log(`오류: ${why}`);
+    beep(toneOf('error'));
+}
+let lastError = 0, toastWatch = null;
+// 빨간 오류 알림이 뜨는지: 알림 상자(#toast-container, 처음 알림 때 생김)에 붙는 것만 봄
+function watchErrorToasts() {
+    const onToast = (ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1 && n.classList.contains('toast-error')) notifyError(`오류 알림: ${(n.querySelector('.toast-title')?.textContent || n.textContent || '').trim().slice(0, 40)}`); };
+    const inner = new MutationObserver(onToast);
+    let box = null;
+    const hook = () => { const b = document.getElementById('toast-container'); if (b && b !== box) { box = b; inner.disconnect(); inner.observe(b, { childList: true }); } };
+    const outer = new MutationObserver(hook);
+    outer.observe(document.body, { childList: true });
+    hook();
+    toastWatch = () => { inner.disconnect(); outer.disconnect(); };
+}
 
 // 휴대폰은 화면을 끄거나 다른 앱을 보면 페이지 소리를 멈춰서, 답이 끝나도 알림이 안 남.
 // 생성하는 동안 소리 없는 아주 짧은 음을 되풀이해 틀어 소리 길을 깨워 두고, 끝나면 멈춘다(옵션 keepAlive, 휴대폰에서만).
@@ -245,10 +270,12 @@ function wrapFetch() {
         try {
             const res = await origFetch.apply(this, arguments);
             lastGen = res.ok ? 'done' : 'error';
+            if (!res.ok) notifyError(`요청 실패 ${res.status}`);
             if (ext && res.ok) extRequestEnded(ext, res.clone());
             return res;
         } catch (e) {
             lastGen = e?.name === 'AbortError' ? 'aborted' : 'error';
+            if (lastGen === 'error') notifyError('요청 연결 끊김');
             throw e;
         } finally { pendingGen--; }
     };
@@ -393,6 +420,7 @@ export function start(a) {
     (window.requestIdleCallback || setTimeout)(() => scanSignals().then(m => { autoSignals = m; if (api) listenSignals(); }));
     const { eventSource, eventTypes: ev } = a.ctx();
     wrapFetch();
+    watchErrorToasts();
     // 답이 실제로 끝났을 때만 울림. ‘생성 끝’(GENERATION_ENDED) 신호는 실리태번이 멈춤 버튼을 숨길 때 나와서 믿지 않는다:
     //   · 본문 도중 다른 생성이 버튼을 먼저 숨기면 진짜 끝엔 안 나옴
     //   · 다른 확장이 생성을 뒤로 넘기며 입력창을 풀어 주면 답이 오기 전에 나옴(보내자마자 울렸음)
@@ -480,6 +508,7 @@ export function stop() {
     for (const t of ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown']) document.removeEventListener(t, unlock, { capture: true });
     keepAudio?.pause(); busy = () => false;
     unwrapFetch();
+    toastWatch?.(); toastWatch = null;
 }
 
 export function options(box, a) {
@@ -532,7 +561,7 @@ export function options(box, a) {
         sel.addEventListener('change', () => { o.toneFor[key] = sel.value; a.save(); beep(sel.value); });
         return row;
     };
-    const drawMain = () => { const m = box.querySelector('.etk-sig-main'); m.replaceChildren(sigRow('main', '메시지 생성이 끝날 때', { fixed: true })); };
+    const drawMain = () => { const m = box.querySelector('.etk-sig-main'); m.replaceChildren(sigRow('main', '메시지 생성이 끝날 때', { fixed: true }), sigRow('error', '오류가 날 때 (429 · 500 · 오류 알림)')); };
     const drawSounds = () => {
         const list = box.querySelector('.etk-sound-list');
         list.innerHTML = '';

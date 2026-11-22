@@ -73,10 +73,12 @@ const rows = () => [...list().querySelectorAll(':scope > .select_chat_block_wrap
 const fileOf = (row) => row.querySelector('.select_chat_block')?.getAttribute('file_name') || '';
 const isCurrent = (row) => row.querySelector('.select_chat_block')?.getAttribute('highlight') === 'true';
 
+// 마지막으로 대화한 때: 분기 채팅은 모채팅 메시지 시각을 그대로 물려받아 방금 만들어도 '한 달 전'이었음 → 만든 시각(서버가 분기 채팅에만 줌)과 둘 중 늦은 쪽
+const lastAt = (d) => Math.max(stampOf(d?.last) || 0, d?.born || 0);
 function infoText(s, file, current) {
     const d = info.get(file);
     if (!d) return '';
-    const m = ctx().timestampToMoment(d.last);
+    const m = ctx().timestampToMoment(lastAt(d));
     const parts = [m?.isValid?.() ? m.fromNow() : '', `메시지 ${d.count}개`, spanText(startOf(s, file), stampOf(d.last)), d.size].filter(Boolean);
     return parts.join(' · ');
 }
@@ -116,9 +118,11 @@ function decorateRow(row, s) {
 
 function sortRows() {
     const how = opts().sort;
-    if (how === 'recent') return;
+    // 최근 대화순은 실리태번 순서 그대로(마지막 메시지 시각) → 분기 채팅(만든 시각이 더 늦음)이 있을 때만 다시 줄 세움
+    if (how === 'recent' && ![...info.values()].some(d => d.born)) return;
     const by = {
-        oldest: (a, b) => stampOf(info.get(a)?.last) - stampOf(info.get(b)?.last),
+        recent: (a, b) => lastAt(info.get(b)) - lastAt(info.get(a)),
+        oldest: (a, b) => lastAt(info.get(a)) - lastAt(info.get(b)),
         count: (a, b) => (info.get(b)?.count || 0) - (info.get(a)?.count || 0),
         name: (a, b) => a.localeCompare(b, undefined, { numeric: true }),
     }[how];
@@ -447,7 +451,7 @@ function watchSearch() {
                 // 답이 긴 생각 글로 시작하면 앞 조각이 통째로 숨겨져 빈 줄 → 서버가 함께 준 '그 덩어리 뒤' 조각으로. 그것도 비면(숨기는 덩어리가 연달아 길 때) 그 채팅만 마지막 글을 따로 받음
                 if (full === '' && typeof x.preview_after === 'string' && x.preview_after) { try { full = toScreen(x.preview_after, s?.avatar || null, !!x.mes_is_user, x.mes_preset || ''); } catch { /* 빈 줄 */ } }
                 const cut = full === '' && !!x.preview_head && x.preview_head !== x.preview_tail;
-                return [x.file_name, { count: x.message_count ?? 0, last: x.last_mes, size: x.file_size || '', full, cut, first: x.first_date ? stampOf(x.first_date) : 0 }];
+                return [x.file_name, { count: x.message_count ?? 0, last: x.last_mes, size: x.file_size || '', full, cut, first: x.first_date ? stampOf(x.first_date) : 0, born: Number(x.branch_born) || 0 }];
             }));
             requestAnimationFrame(decorate);
         }).catch(() => {});
