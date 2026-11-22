@@ -422,6 +422,8 @@ html.etk-toast-close #toast-container > div:has(> .toast-close-button):has(> .et
 /* 제목: 테마 제목 글꼴이 줄 높이(작게 묶어 둠)보다 커서 글자가 칸 밖으로 넘쳐 아래 첫 판 줄과 겹치고 잘렸음 → 줄 높이를 글자에 맞춤 */
 .etk-changelog h3 { margin: 0 0 10px; flex: none; line-height: 1.35 !important; padding: 2px 0 !important; overflow: visible; }
 .etk-changelog .etk-cl-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
+.etk-changelog .etk-cl-note { flex: none; margin: 0 0 6px; font-size: .9em; opacity: .7; }
+.etk-changelog .etk-cl-ver + .etk-cl-ver { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.3)); }
 .etk-changelog .etk-cl-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
 .etk-changelog .etk-cl-head small { opacity: .65; }
 .etk-changelog ul { margin: 0; padding-left: 1.2em; }
@@ -774,6 +776,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 #etk_dialog .etk-hint[hidden] { display: none; }
 #etk_dialog .etk-hint b { margin-right: 6px; }
 #etk_dialog .etk-hint span { opacity: .75; }
+#etk_dialog .etk-hint .etk-hint-state { display: block; opacity: 1; margin-top: 2px; }
 #etk_dialog .etk-row-picked { background: var(--etk-soft); }
 /* 손가락 기기: › 를 누르기 쉽게 넓힘 */
 @media (hover: none) { #etk_dialog .etk-row-go { padding: 10px 6px 10px 14px; margin: -10px -4px -10px 0; } }

@@ -99,6 +99,9 @@ const STATE_BACK = { same: '그쪽을 끄면 breeze가 다시 맡아요.', part:
 const featureState = new Map();   // id → 'same' | 'part' | 'clash' | 'error'
 const featureInfo = new Map();    // id → { saw, who, back }
 function setState(id, st, info) {
+    // 이미 찾아 둔 이름은 이어받음(같은 알림이 다시 올 때마다 '이름은 알 수 없어요'로 돌아갔다 다시 찾지 않게)
+    const had = featureInfo.get(id);
+    if (info?.whoLater && had?.whoAsked && had.who && had.who.kind !== 'unknown') info = { ...info, who: had.who, whoAsked: true };
     const same = (featureState.get(id) || null) === (st || null) && JSON.stringify(featureInfo.get(id) || null) === JSON.stringify(info || null);
     if (same && !(info?.who instanceof Promise)) return;
     if (st) featureState.set(id, st); else featureState.delete(id);
@@ -123,6 +126,11 @@ function stateHtml(id) {
     const st = shownState(id);
     if (!st) return '';
     const info = featureInfo.get(id) || {};
+    // 이름을 찾는 데 품이 드는 경우(whoLater): 이유를 화면에 보여 줄 때 한 번만 찾아서, 찾으면 '누가' 줄을 고쳐 그림
+    if (info.whoLater && !info.whoAsked && (!info.who || info.who.kind === 'unknown')) {
+        info.whoAsked = true;
+        Promise.resolve(info.whoLater()).then(w => { if (w && w.kind !== 'unknown' && featureInfo.get(id) === info) { info.who = w; paintState(id); } }).catch(() => { });
+    }
     if (st === 'error') return `<div class="etk-card-state etk-state-error"><b>${esc(STATE_HEAD.error)}</b></div>`;
     const lines = [whoText(info.who) && `누가: ${esc(whoText(info.who))}`, info.saw && `본 것: ${esc(info.saw)}`, esc(info.back || STATE_BACK[st])].filter(Boolean);
     return `<div class="etk-card-state etk-state-${st}"><b>${esc(STATE_HEAD[st])}</b>${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
@@ -131,10 +139,10 @@ const restCount = (g) => FEATURES.filter(f => f.group === g && shownState(f.id) 
 function paintState(id) {
     const root = dialog();
     if (!root) return;
-    for (const row of root.querySelectorAll(`.etk-row[data-id="${id}"]`)) {
-        row.querySelector(':scope > .etk-pill')?.remove();
-        row.querySelector(':scope > .etk-row-text')?.insertAdjacentHTML('afterend', pillHtml(id));
-    }
+    // 줄은 통째로 다시 그림: 상태가 생기거나 없어지면 표시뿐 아니라 '눌러서 이유 보기'(›)도 같이 바뀜. 묶음에 든 기능이면 묶음 줄도
+    const me = FEATURES.find(x => x.id === id);
+    if (me) for (const row of root.querySelectorAll(`.etk-row[data-id="${id}"]`)) row.outerHTML = rowHtml(me);
+    if (me?.bundle) for (const row of root.querySelectorAll('.etk-row[data-bundle]')) if (row.dataset.bundle === me.bundle) row.outerHTML = bundleRowHtml({ bundle: me.bundle, members: FEATURES.filter(x => x.bundle === me.bundle) });
     for (const box of root.querySelectorAll(`.etk-detail[data-id="${id}"]`)) {
         box.querySelector(':scope > .etk-card-state')?.remove();
         (box.querySelector(':scope > .etk-detail-desc') || box.querySelector(':scope > .etk-detail-on'))?.insertAdjacentHTML('afterend', stateHtml(id));
@@ -217,7 +225,9 @@ const dialog = () => document.getElementById('etk_dialog');
 // 드롭다운에 꺼내 둔 기능(자주 켜고 끄는 것)
 const quick = () => (settings().quick ??= []);
 const onCount = (g) => FEATURES.filter(f => (!g || f.group === g) && settings().enabled[f.id]).length;
-const hasMore = (f) => !!(f.hasOptions || f.hasAction);
+// 세부 설정이 없는 기능도 쉬는 중 · 일부 쉼 · 물러남 · 오류면 눌러서 그 이유를 볼 수 있게(이유는 세부 설정 화면에만 나와서, 설정이 없는 기능은 볼 길이 없었음)
+const stateOf = (f) => (f.members ? f.members.map(m => shownState(m.id)).find(Boolean) : shownState(f.id)) || null;
+const hasMore = (f) => !!(f.hasOptions || f.hasAction || stateOf(f));
 const sheet = () => matchMedia('(max-width: 700px)').matches;
 const touchOnly = () => matchMedia('(hover: none)').matches;
 // PC(아래에서 올라오는 창이 아니고, 넓힐 자리가 있을 때): 세부 설정을 열면 창을 넓혀 왼쪽 목록 · 오른쪽 세부 설정 두 칸으로(목록으로 돌아갔다 다시 들어가지 않게)
@@ -314,7 +324,8 @@ function renderList(body) {
 }
 function renderDetail(body, f) {
     if (f.members) {   // 묶음: 설명 한 줄 + 안에 든 기능마다 이름 · 켜고 끄기 · 설정
-        body.innerHTML = `${f.desc ? `<div class="etk-detail-desc etk-bundle-desc">${esc(f.desc)}</div>` : ''}${f.members.map(m => { const on = !!settings().enabled[m.id]; return `<div class="etk-detail etk-bundle-part" data-id="${m.id}">
+        // 쉬고 있는 기능을 맨 위로: 이유가 아래쪽에 있으면 굴려야 보여서 '일부 쉼'을 누르고도 못 찾았음
+        body.innerHTML = `${f.desc ? `<div class="etk-detail-desc etk-bundle-desc">${esc(f.desc)}</div>` : ''}${[...f.members].sort((x, y) => !!shownState(y.id) - !!shownState(x.id)).map(m => { const on = !!settings().enabled[m.id]; return `<div class="etk-detail etk-bundle-part" data-id="${m.id}">
         <label class="etk-detail-on"><input type="checkbox" class="etk-check" ${on ? 'checked' : ''} aria-label="${esc(m.name)}"><span>${esc(m.name)}</span></label>
         ${m.desc ? `<div class="etk-detail-desc">${esc(m.desc)}</div>` : ''}${stateHtml(m.id)}
         ${m.hasOptions ? (on ? `<div class="etk-options" data-options="${m.id}" data-title="${esc(m.name)}"></div>` : '<div class="etk-empty-line">켜면 세부 설정을 바꿀 수 있어요</div>') : ''}
@@ -383,7 +394,9 @@ function showHint(f) {
     const hint = root.querySelector('.etk-hint');
     if (!f) { hint.hidden = true; return; }
     root.querySelector(`.etk-row[data-id="${f.id}"]`)?.classList.add('etk-row-picked');
-    hint.innerHTML = `<b>${esc(f.name)}</b><span>${esc(f.desc || '')}</span>`;
+    // 쉬고 있으면 왜인지 한 줄(자세한 건 › 로)
+    const st = stateOf(f);
+    hint.innerHTML = `<b>${esc(f.name)}</b><span>${esc(f.desc || '')}</span>${st ? `<span class="etk-hint-state">${esc(STATE_HEAD[st])} › 를 누르면 자세히 볼 수 있어요.</span>` : ''}`;
     hint.hidden = false;
 }
 let listScrolled = null;
@@ -688,9 +701,13 @@ async function showChangelog() {
     const body = v => Array.isArray(v.groups)
         ? v.groups.map(g => `<details class="etk-cl-group"><summary>${esc(g.title)}<small>${(g.items || []).length}</small></summary><div class="etk-cl-body">${list(g.items)}</div></details>`).join('')
         : list(v.items);
-    // 창엔 이번 판만, 지난 판은 아래 링크(GitHub 전체 내역)로: 지난 판을 창에도 접어 두니 링크와 겹쳐 쓸데없었음
-    const v = log[0];
-    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3><div class="etk-cl-scroll"><section><div class="etk-cl-head"><b>${esc(v.version)}</b><small>${esc(v.date || '')}</small></div>${body(v)}</section></div><a class="etk-cl-all" href="https://github.com/URMIIE/breeze/blob/main/CHANGELOG.md" target="_blank" rel="noopener">지난 내역 전체 보기</a></div>`;
+    // 창엔 마지막으로 내역을 본 판 뒤에 나온 판 전부(여러 판을 건너 받은 사람은 최신 판만 보면 그 사이 바뀐 것을 모름).
+    //   그보다 지난 판은 아래 링크(GitHub 전체 내역)로. 처음 깔았거나 이미 다 본 사람은 최신 판만.
+    //   기준은 화면을 연 뒤 처음 내역을 볼 때의 값으로 잡아 둠: 한 번 보면 seenLog 가 최신으로 바뀌어, 새로고침 전 다시 열어도 같은 판들이 보이게
+    showChangelog.base ??= settings().seenLog || '';
+    const missed = showChangelog.base ? log.filter(x => verNum(x.version) > verNum(showChangelog.base)) : [];
+    const shown = missed.length ? missed : [log[0]];
+    const html = `<div class="etk-changelog"><h3>breeze 업데이트 내역</h3>${shown.length > 1 ? `<div class="etk-cl-note">${esc(showChangelog.base)} 뒤에 나온 ${shown.length}개 판의 내역이에요.</div>` : ''}<div class="etk-cl-scroll">${shown.map(v => `<section class="etk-cl-ver"><div class="etk-cl-head"><b>${esc(v.version)}</b><small>${esc(v.date || '')}</small></div>${body(v)}</section>`).join('')}</div><a class="etk-cl-all" href="https://github.com/URMIIE/breeze/blob/main/CHANGELOG.md" target="_blank" rel="noopener">지난 내역 전체 보기</a></div>`;
     if (version && settings().seenLog !== version) { settings().seenLog = version; save(); }
     if (!showChangelog.wired) {
         showChangelog.wired = true;

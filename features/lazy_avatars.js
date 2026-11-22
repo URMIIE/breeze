@@ -2,19 +2,22 @@
 // 캐릭터 목록 · 페르소나 목록 · 즐겨찾기 줄은 화면에 안 보이는 줄의 사진까지 한꺼번에 불러와, 목록이 길면 열 때 요청이 몰린다.
 // 목록에 새로 붙는 사진 중 화면 밖인 것은 주소를 잠깐 떼어 두었다가, 굴려서 가까이 오면 붙인다.
 // 다른 확장 · 테마가 이미 늦게 불러오게 해 둔 사진(loading="lazy" 이거나 주소가 비어 있음)은 건드리지 않는다.
+import { fromMarks } from '../lib/who.js';
 const LISTS = ['#rm_print_characters_block', '#user_avatar_block', '#rm_group_members', '#rm_group_add_members', '#HotSwapWrapper', '#persona_connections_list'];
 const HOLD = 'data-etk-src';
 // 목록마다 따로 판단(다른 쪽이 한 목록만 늦게 불러오는 경우가 있음): 그 목록 사진이 전부 다른 쪽 방식이면 그 목록만 맡김
 const LIST_NAMES = { '#rm_print_characters_block': '캐릭터 목록', '#user_avatar_block': '페르소나 목록', '#rm_group_members': '그룹 멤버', '#rm_group_add_members': '그룹에 넣을 캐릭터', '#HotSwapWrapper': '즐겨찾기 줄', '#persona_connections_list': '페르소나 연결 목록' };
 let listState = new Map();   // 목록 → 'others' | 'ours'
+let otherSample = null;      // 다른 쪽 방식으로 늦게 불러와지던 사진 하나(누가 했는지 찾을 때 그 사진에 남은 표시를 봄)
+const whoLater = () => fromMarks(otherSample);
 function report() {
     if (clashed) return;
     const others = [...listState].filter(([, v]) => v === 'others').map(([k]) => LIST_NAMES[k] || k);
     const ours = [...listState.values()].some(v => v === 'ours');
     const back = '그쪽을 끄면 다음에 목록을 열 때 breeze가 맡아요.';
     if (!others.length) api?.rest(null);
-    else if (!ours) api?.rest('same', { saw: '새로 붙은 사진이 이미 다른 방식으로 늦게 불러와지고 있어요(loading="lazy"이거나 주소가 비어 있음)', who: { kind: 'unknown' }, back });
-    else api?.rest('part', { saw: `${others.join(' · ')} 사진은 다른 쪽이 이미 늦게 불러오고 있어서 그 목록만 맡겼어요(나머지 목록은 breeze가 해요)`, who: { kind: 'unknown' }, back });
+    else if (!ours) api?.rest('same', { saw: '새로 붙은 사진이 이미 다른 방식으로 늦게 불러와지고 있어요(loading="lazy"이거나 주소가 비어 있음)', who: { kind: 'unknown' }, whoLater, back });
+    else api?.rest('part', { saw: `${others.join(' · ')} 사진은 다른 쪽이 이미 늦게 불러오고 있어서 그 목록만 맡겼어요(나머지 목록은 breeze가 해요)`, who: { kind: 'unknown' }, whoLater, back });
 }
 let observers = [], viewer = null, api = null, clashed = false;
 
@@ -45,8 +48,11 @@ function holdAll(imgs, sel) {
     let byOthers = 0, seen = 0;
     for (const img of new Set(imgs)) {
         if (!img.isConnected || img.hasAttribute(HOLD) || img.complete) continue;
+        // 목록 줄의 프로필 사진이 아닌 그림(다른 확장이 줄 안에 따로 넣은 작은 그림)은 판단에서 뺌: 그런 그림이 늦게 불러와진다고 '프로필 사진을 다른 쪽이 맡았다'고 잘못 알렸음
+        const avatar = !!img.closest('.avatar');
+        if (!avatar && (img.loading === 'lazy' || !img.getAttribute('src'))) continue;
         seen++;
-        if (img.loading === 'lazy' || !img.getAttribute('src') || /\/null$/.test(img.getAttribute('src'))) { byOthers++; continue; }   // 다른 쪽이 이미 늦게 불러오게 해 둠
+        if (img.loading === 'lazy' || !img.getAttribute('src') || /\/null$/.test(img.getAttribute('src'))) { byOthers++; otherSample ??= img; continue; }   // 다른 쪽이 이미 늦게 불러오게 해 둠
         const r = img.getBoundingClientRect();
         // 화면 안 · 가까운 것은 그대로 불러옴. 안 보이는 창(크기 0) 안의 사진은 떼어 둠
         if (r.width && r.bottom > -200 && r.top < innerHeight + 200) continue;
@@ -66,7 +72,7 @@ function holdAll(imgs, sel) {
 }
 
 export function start(a) {
-    api = a; clashed = false; listState = new Map();
+    api = a; clashed = false; listState = new Map(); otherSample = null;
     viewer = new IntersectionObserver(entries => {
         for (const e of entries) if (e.isIntersecting) { viewer.unobserve(e.target); restore(e.target); }
     }, { rootMargin: '300px' });
