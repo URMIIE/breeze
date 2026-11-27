@@ -148,7 +148,13 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 .etk-launcher .etk-quick-row { display: flex; align-items: center; gap: 8px; }
 .etk-launcher .etk-quick-row .checkbox_label { flex: 1; min-width: 0; margin: 2px 0; }
 .etk-launcher .etk-quick-empty { display: block; opacity: .6; margin: 2px 0 6px; }
-.etk-launcher .etk-open { margin: 8px 0 2px; padding: 4px 12px; width: fit-content; }
+.etk-launcher .etk-wand-self { margin: 2px 0 6px; }
+/* 전체 설정 열기: 꺼내 둔 기능이 길어도 바로 닿게 맨 위에. 테마의 버튼 모양을 받지 않고 강조색이 옅게 깔린 작은 버튼으로(누르는 높이 40px, 보이는 높이 32px) */
+.etk-launcher .etk-open { position: relative; display: flex; align-items: center; justify-content: flex-end; min-height: 30px; margin: 0 2px 2px; cursor: pointer; }
+.etk-launcher .etk-open::before { content: ''; position: absolute; inset: -5px 0; }
+.etk-launcher .inline-drawer-content { padding-top: 6px; }
+.etk-launcher .etk-open-face { display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border-radius: 14px; font-size: max(13px, .9em); font-weight: 500; color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeQuoteColor) 13%, transparent); }
+.etk-launcher .etk-open:hover .etk-open-face, .etk-launcher .etk-open:focus-visible .etk-open-face { background: color-mix(in srgb, var(--SmartThemeQuoteColor) 22%, transparent); }
 
 .etk-ts-edit { text-align: left; }
 .etk-ts-edit .etk-ts-step { margin: 0 0 14px; }
@@ -350,11 +356,12 @@ html.etk-toast-close #toast-container > div:has(> .toast-close-button):has(> .et
 #etk_dialog .etk-card-state { margin: 8px 0; padding: 8px 10px; border-radius: 8px; font-size: .86em; line-height: 1.55; background: rgba(230, 160, 40, .16); border: 1px solid rgba(230, 160, 40, .35); word-break: keep-all; }
 #etk_dialog .etk-card-state.etk-state-clash, #etk_dialog .etk-card-state.etk-state-error { background: rgba(220, 70, 60, .14); border-color: rgba(220, 70, 60, .35); }
 #etk_dialog .etk-card-state b { display: block; margin-bottom: 2px; }
-#etk_dialog .etk-section small.etk-sec-rest { opacity: .8; }
-#etk_dialog .etk-section small.etk-sec-rest:empty { display: none; }
 #etk_dialog .etk-splash-look[hidden] { display: none; }
 #etk_dialog .etk-splash-io { margin: 6px 0 8px; gap: 8px; }
 #etk_dialog .etk-sub-io { display: flex; align-items: center; }
+/* 제목 글자와 내보내기 · 가져오기 버튼이 붙어 보이던 것: 버튼은 줄 오른쪽 끝으로, 둘 사이도 띄움 */
+#etk_dialog .etk-sub-io .etk-sum-io { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+#etk_dialog .etk-sub-io .etk-sum-io > i { cursor: pointer; padding: 4px; }
 #etk_dialog .etk-server-toggle { cursor: pointer; }
 #etk_dialog .etk-server-pending { opacity: .9; font-weight: 600; }
 #etk_dialog .etk-tool-blank { visibility: hidden; pointer-events: none; }
@@ -374,33 +381,93 @@ html.etk-toast-close #toast-container > div:has(> .toast-close-button):has(> .et
 :is(#etk_dialog, .etk-launcher) .etk-pin-list { max-height: 360px; overflow-y: auto; padding-right: 4px; }
 .etk-sel-menu { max-height: min(60vh, 420px); overflow-y: auto; }
 
-#etk_dialog .etk-install { border: 1px solid var(--etk-line); border-radius: 8px; margin: 8px 0; overflow: hidden; }
-#etk_dialog .etk-install-os { display: flex; align-items: center; gap: 4px; padding: 4px 6px; border-bottom: 1px solid var(--etk-line); font-size: .85em; }
-#etk_dialog .etk-server > .etk-install-os { border: 0; padding: 4px 0; }
-#etk_dialog .etk-install-steps { line-height: 1.5; }
-#etk_dialog .etk-install-steps li { margin: 6px 0; }
-#etk_dialog .etk-install-steps small { display: block; opacity: .7; word-break: keep-all; }
-#etk_dialog .etk-install-how span { display: block; }
-/* 테마가 코드 글씨를 옅은 색으로 정해 두면 밝은 바탕에서 안 보였음 → 본문 글자색으로 */
-#etk_dialog .etk-steps code { color: inherit; background: var(--etk-soft); border: 0; padding: 1px 5px; border-radius: 4px; opacity: 1; }
-#etk_dialog .etk-os-tab { padding: 3px 9px; border-radius: 6px; cursor: pointer; opacity: .6; }
-#etk_dialog .etk-os-tab.etk-on { opacity: 1; background: color-mix(in srgb, currentColor 12%, transparent); }
-#etk_dialog .etk-install-copy { margin-left: auto; padding: 6px 8px; cursor: pointer; opacity: .75; }
-#etk_dialog .etk-install-cmd { margin: 0; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; font-size: .8em; line-height: 1.5; user-select: all; text-align: left; }
 
 /* 설명 글은 잘리지 않게 줄바꿈(좁은 확장 칸에서 말줄임으로 잘렸음). 파일 이름 칸은 그대로 말줄임 */
 .etk-settings .etk-options .etk-flex > small:not([data-show]):not([data-info]):not(.etk-sound-file) { white-space: normal; overflow: visible; text-overflow: clip; }
 
-/* 완료 알림음: 알림 줄(체크칸 + 이름 · 오른쪽 소리 칸), 내 소리 줄 */
-.etk-settings .etk-sig-row { gap: 8px; align-items: center; }
-.etk-settings .etk-sig-row > .checkbox_label { flex: 1; min-width: 0; }
-.etk-settings .etk-sig-row > .etk-sig-tone { flex: none; width: 9.5em; margin: 0; }
-.etk-settings .etk-sound-row { gap: 6px; align-items: center; padding: 2px 0; }
-.etk-settings .etk-sound-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.etk-settings .etk-sound-pick { width: fit-content; margin-top: 4px; }
-
-/* 내 알림음이 많아도 설정 칸이 끝없이 길어지지 않게 목록만 스크롤 */
-.etk-settings .etk-sound-list { max-height: 12em; overflow-y: auto; }
+/* 완료 알림음 세부 설정: 알림마다 한 줄, 줄을 누르면 그 자리에서 알림음 고르기와 크기가 펼쳐짐.
+   색은 창의 변수에서(창 밖 빠른 설정 칸에서도 그려지므로 변수가 없을 때의 값도 둠). 누르는 곳은 40px 이상, 글자는 13px 이상.
+   --snd-paper = 불투명한 창 바탕색: 창 바탕이 반투명이면 뒤의 테마 무늬가 칸 안으로 비쳐서, 이 화면과 펼친 칸은 불투명하게 칠함 */
+.etk-snd { --snd-line: var(--etk-line, color-mix(in srgb, currentColor 12%, transparent)); --snd-soft: var(--etk-soft, color-mix(in srgb, currentColor 6%, transparent)); --snd-accent: var(--etk-accent, var(--SmartThemeQuoteColor, #7a9cc6)); --snd-pad: 16px; --snd-paper: var(--SmartThemeBlurTintColor); --snd-box: color-mix(in srgb, currentColor 4%, var(--snd-paper)); text-align: left; background: var(--snd-paper); }
+@supports (color: rgb(from red r g b)) { .etk-snd { --snd-paper: rgb(from var(--SmartThemeBlurTintColor) r g b / 1); } }
+.etk-snd-row { display: flex; align-items: center; min-height: 48px; padding: 0 calc(var(--snd-pad) - 13px) 0 var(--snd-pad); margin: 0; box-sizing: border-box; border-radius: 14px; cursor: pointer; }
+.etk-snd-row:focus-visible, .etk-snd-reel:focus-visible, .etk-snd-step:focus-visible, .etk-snd-ic:focus-visible, .etk-snd-btn:focus-visible { outline: 2px solid var(--snd-accent); outline-offset: -2px; }
+.etk-snd-tx { flex: 1; min-width: 0; padding: 6px 0; }
+.etk-snd-tx > b { font-weight: 600; word-break: keep-all; }
+.etk-snd-tx > small { display: block; margin-top: 2px; font-size: max(13px, .85em); line-height: 1.4; opacity: .62; }
+.etk-snd-job { margin-left: 8px; font-size: max(13px, .85em); font-weight: 400; opacity: .62; white-space: nowrap; }
+.etk-snd-off .etk-snd-tx > b { opacity: .6; }
+.etk-snd-more { flex: none; width: 28px; height: 40px; display: grid; place-items: center; font-size: 11px; opacity: .6; }
+.etk-snd-more > i { transition: transform .18s ease; }
+.etk-snd-gap { flex: none; width: 44px; }
+.etk-snd-fold .etk-snd-tx > b { font-weight: 500; font-size: max(13px, .93em); opacity: .65; }
+/* 펼치는 칸: 머리 줄과 안쪽이 한 덩어리. 펼치면 둥근 옅은 바탕 하나(테두리 없음), 높이와 흐림이 부드럽게 바뀌고 화살표가 돌아감.
+   안쪽은 줄 높이 0 ↔ 내용 높이로 바뀌는 격자 한 칸이라 내용이 찌그러지지 않고 잘려서 나타남 */
+.etk-snd-item { border-radius: 14px; transition: background-color .18s ease; }
+.etk-snd-item.etk-snd-opened:not(.etk-snd-plain) { background: var(--snd-box); }
+.etk-snd-body { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .18s ease, opacity .18s ease; }
+.etk-snd-opened > .etk-snd-body { grid-template-rows: 1fr; opacity: 1; }
+.etk-snd-opened > .etk-snd-row > .etk-snd-more > i { transform: rotate(180deg); }
+.etk-snd-inner { min-height: 0; overflow: hidden; }
+.etk-snd-item:not(.etk-snd-plain) > .etk-snd-body > .etk-snd-inner::after { content: ''; display: block; height: 12px; }   /* 아래 안쪽 여백(접힐 때 같이 접히게 안에 둠) */
+@media (prefers-reduced-motion: reduce) { .etk-snd-item, .etk-snd-body, .etk-snd-more > i { transition: none; } }
+/* 체크: 보이는 동그라미는 18px, 누르는 칸은 44x44. 안의 체크칸은 투명하게 칸 전체를 덮어 눌림을 받음(테마의 체크칸 규칙을 이김) */
+.etk-snd-tick { position: relative; flex: none; width: 44px; height: 44px; margin: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.etk-snd-tick > input { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; opacity: 0 !important; appearance: none !important; border: 0 !important; background: none !important; box-shadow: none !important; cursor: pointer; }
+.etk-snd-mark { position: relative; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid color-mix(in srgb, currentColor 40%, transparent); pointer-events: none; }
+.etk-snd-tick > input:checked + .etk-snd-mark { background: var(--snd-accent); border-color: var(--snd-accent); }
+.etk-snd-tick > input:checked + .etk-snd-mark::after { content: ''; position: absolute; left: 5px; top: 1.6px; width: 4px; height: 8px; border: solid #fff; border-width: 0 1.7px 1.7px 0; transform: rotate(45deg); }
+.etk-snd-tick > input:focus-visible + .etk-snd-mark { outline: 2px solid var(--snd-accent); outline-offset: 2px; }
+/* 갈래 머리: 흐린 작은 글, 위에 가는 선 */
+.etk-snd-sec { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 14px var(--snd-pad) 4px; border-top: 1px solid var(--snd-line); font-size: 13px; opacity: .65; }
+.etk-snd-sec > em { font-style: normal; white-space: nowrap; }
+.etk-snd [hidden] { display: none; }
+.etk-snd-note { display: block; padding: 6px var(--snd-pad); font-size: 13px; line-height: 1.5; opacity: .65; }
+/* 크기 줄: 이름, 끄는 줄, 숫자. 펼친 칸 안에서는 '알림음' 글과 왼쪽 끝이 같음 */
+.etk-snd-fld { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 var(--snd-pad); }
+.etk-snd-top { min-height: 48px; font-weight: 600; }
+.etk-snd-lb { flex: none; min-width: 44px; }
+.etk-snd-top .etk-snd-lb { min-width: 64px; }
+.etk-snd-num { flex: none; width: 30px; text-align: right; font-size: 13px; font-weight: 400; opacity: .65; }
+.etk-snd input[type=range].etk-snd-range { --p: 50%; flex: 1; min-width: 0; width: auto !important; height: 40px !important; margin: 0 !important; padding: 0 !important; appearance: none !important; -webkit-appearance: none !important; background: none !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; filter: none !important; transition: none !important; cursor: pointer; }
+.etk-snd input[type=range].etk-snd-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--snd-accent) var(--p), var(--snd-line) var(--p)); }
+.etk-snd input[type=range].etk-snd-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7px; box-sizing: border-box; border-radius: 50%; background: #fff; border: 1.3px solid var(--snd-accent); box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
+.etk-snd input[type=range].etk-snd-range::-moz-range-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--snd-accent) var(--p), var(--snd-line) var(--p)); }
+.etk-snd input[type=range].etk-snd-range::-moz-range-thumb { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; background: #fff; border: 1.3px solid var(--snd-accent); box-shadow: 0 1px 3px rgb(0 0 0 / .2); }
+/* 알림음 고르기: 이름이 옆으로 늘어선 한 줄. 고른 이름은 늘 가운데에 또렷하게, 앞뒤 이름은 흐리게 있다가 양 끝에서 서서히 사라짐. 옆으로 밀면 이름마다 가운데에 멈춤 */
+.etk-snd-reelhd { display: flex; justify-content: space-between; align-items: baseline; padding: 2px var(--snd-pad) 0; }
+.etk-snd-cnt { font-size: 13px; opacity: .65; }
+.etk-snd-reelrow { display: flex; align-items: center; height: 40px; padding: 0 calc(var(--snd-pad) - 14px); }
+.etk-snd-step, .etk-snd-ic { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; font-size: 12px; opacity: .65; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+@media (hover: hover) { .etk-snd-step:hover, .etk-snd-ic:hover { opacity: 1; background: var(--snd-soft); } }
+.etk-snd-reel { position: relative; flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; gap: 22px; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; cursor: grab; user-select: none; -webkit-user-select: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 2%, #000 32%, #000 68%, transparent 98%); mask-image: linear-gradient(90deg, transparent 2%, #000 32%, #000 68%, transparent 98%); }
+.etk-snd-reel::-webkit-scrollbar { display: none; }
+/* 첫 이름과 끝 이름도 가운데에 설 수 있게 양 끝에 줄 폭의 절반만큼 빈 자리 */
+.etk-snd-reel::before, .etk-snd-reel::after { content: ''; flex: 0 0 50%; }
+.etk-snd-reel > span { flex: none; max-width: 12em; overflow: hidden; text-overflow: ellipsis; scroll-snap-align: center; opacity: .55; }
+.etk-snd-reel > span.etk-snd-cur { opacity: 1; font-weight: 600; color: var(--snd-accent); }
+/* 마우스로 끄는 동안은 이름마다 멈추지 않고 손을 따라옴 */
+.etk-snd-reel.etk-snd-drag { scroll-snap-type: none; cursor: grabbing; }
+/* 내 알림음 관리: 파일 한 줄(이름, 듣기, 지우기)과 올리기 버튼 */
+.etk-snd-file { display: flex; align-items: center; min-height: 44px; padding: 0 calc(var(--snd-pad) - 13px) 0 var(--snd-pad); }
+.etk-snd-file > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.etk-snd-btn { position: relative; width: fit-content; height: 32px; margin: 6px var(--snd-pad) 0; padding: 0 13px; box-sizing: border-box; border-radius: 16px; border: 1px solid var(--snd-accent); color: var(--snd-accent); font-size: max(13px, .9em); font-weight: 600; display: flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap; }
+.etk-snd-btn::before { content: ''; position: absolute; inset: -5px 0; }   /* 누르는 높이 42px */
+.etk-snd-btn > i { font-size: 11px; }
+/* 설정 창의 세부 화면: 줄을 창 옆 여백 쪽으로 10px 넓혀 펼친 칸의 둥근 바탕이 숨 쉴 틈을 갖게 하고, 맨 위 켜짐 줄의 글과 체크를 아래 줄들과 같은 세로줄에 맞춤 */
+#etk_dialog .etk-detail[data-id="done_sound"] .etk-snd { margin: 0 -10px; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-options { margin: 0; padding: 0; border-top: 0; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-detail-on { flex-direction: row-reverse; justify-content: space-between; min-height: 40px; margin: 0; padding-left: 6px; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-detail-on > input.etk-check { position: relative; flex: none; width: 18px !important; height: 18px !important; min-width: 0 !important; min-height: 0 !important; margin: 0 6px 0 0 !important; padding: 0 !important; box-sizing: border-box; appearance: none !important; -webkit-appearance: none !important; border-radius: 50% !important; border: 1.5px solid color-mix(in srgb, currentColor 40%, transparent) !important; background: none !important; box-shadow: none !important; filter: none !important; transform: none !important; cursor: pointer; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-detail-on > input.etk-check::before { display: none !important; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-detail-on > input.etk-check:checked { background: var(--etk-accent) !important; border-color: var(--etk-accent) !important; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-detail-on > input.etk-check:checked::after { content: ''; position: absolute; left: 5px; top: 1.6px; width: 4px; height: 8px; border: solid #fff; border-width: 0 1.7px 1.7px 0; transform: rotate(45deg); }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-detail-desc { margin-bottom: 4px; padding-left: 6px; font-size: max(13px, .85em); }
+/* 이 화면이 그려지는 칸에는 불투명한 창 바탕색: 창 바탕이 반투명이면 뒤의 테마 무늬가 줄 사이로 비쳤음 */
+@supports (color: rgb(from red r g b)) { #etk_dialog :is(.etk-pane-body, .etk-main):has(> .etk-detail[data-id="done_sound"]) { background: rgb(from var(--SmartThemeBlurTintColor) r g b / 1); } }
+/* 확장 목록의 빠른 설정 칸에서는 그 칸의 회색 바탕을 빼고 이 화면의 바탕 한 겹만(바탕 위에 펼친 칸의 바탕이 또 겹쳐 보였음) */
+.etk-launcher .etk-quick-options:has(> .etk-snd) { margin-left: 0; padding: 0; background: none; border-radius: 14px; }
 
 /* 확장 목록의 이름: 다른 확장 이름과 같은 크기 · 적당한 굵기(테마마다 머리글 글자 크기가 달라 1.2배 · 아주 굵게 두면 혼자 크고 튀었음). 설정 창 안의 이름은 그대로 */
 #etk_settings .etk-brand-name { font-size: 1em !important; font-weight: 500 !important; font-family: inherit !important; }   /* 확장 목록에선 다른 확장 이름과 같은 글꼴(테마 글꼴과 달라 튀었음), 기울임 · 굵기는 이름 모양 그대로 */
@@ -410,9 +477,6 @@ html.etk-toast-close #toast-container > div:has(> .toast-close-button):has(> .et
 #etk_dialog .etk-search input { width: auto !important; min-width: 0 !important; max-width: none !important; flex: 1 1 0 !important; border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 0 !important; height: 32px !important; margin: 0 !important; outline: 0 !important; }
 #etk_dialog .etk-close { flex: none; }
 
-/* 복사 버튼은 명령 아래 오른쪽에(칸 이름 옆에 두면 윈도우 칸을 잘못 누르기 쉬웠음) */
-#etk_dialog .etk-install-foot { display: flex; justify-content: flex-end; padding: 0 8px 8px; }
-#etk_dialog .etk-install-foot .menu_button { margin: 0; padding: 4px 12px; font-size: .85em; display: inline-flex; align-items: center; gap: 6px; }
 #etk_settings .etk-brand-name.etk-weight-fill { -webkit-text-stroke: .045em currentColor !important; }   /* 글꼴에 500 이 없을 때 400 위에 얇은 테두리로 중간 굵기 */
 .etk-settings .etk-theme-rows { max-height: 12em; overflow-y: auto; }   /* 고른 테마가 많아도 설정 칸이 끝없이 길어지지 않게 */
 .etk-launcher .etk-launch-count, #etk_settings .etk-launch-count { cursor: pointer; }
@@ -441,10 +505,6 @@ html.etk-toast-close #toast-container > div:has(> .toast-close-button):has(> .et
 .etk-changelog .etk-cl-old > .etk-cl-body > ul { padding-top: 4px; }
 .etk-changelog .etk-cl-all { flex: none; display: inline-block; margin-top: 10px; font-size: .9em; opacity: .8; }
 .etk-launch-count.etk-new::after { content: "N"; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 15px; height: 15px; margin-left: 2px; border-radius: 999px; font-size: 9.5px; font-weight: 700; line-height: 1; background: rgba(229, 72, 77, .16); color: #d9363e; vertical-align: top; }
-.etk-settings .etk-tone-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
-.etk-settings .etk-tone-chip { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 4px 10px; font-size: .9em; }
-.etk-settings .etk-tone-chip i { font-size: .8em; }
-.etk-settings .etk-sound-list { padding-bottom: 4px; }
 
 /* 테마 맞추기 */
 .etk-settings .etk-tf-open { width: fit-content; margin: 6px 0; }
@@ -723,22 +783,28 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 #etk_dialog.etk-in-detail :is(.etk-brand, .etk-search) { display: none; }
 #etk_dialog .etk-main { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 10px 14px; }
 /* PC 두 칸(세부 설정을 열면 창을 넓혀 왼쪽 목록 · 오른쪽 세부 설정). 칸마다 따로 굴림 */
-#etk_dialog .etk-window:not(.etk-dragging) { transition: width .16s ease, left .16s ease; }
+/* 세부 설정을 열고 닫을 때 창 폭이 부드럽게 바뀐다. 그동안 목록 줄은 폭이 그대로다(두 칸의 왼쪽 목록은 숫자로 못 박은 폭, 한 칸 목록은 다 바뀐 뒤의 창 폭까지만):
+   목록이 창을 따라 늘었다 줄면 오른쪽 체크가 미끄러지듯 흔들렸다 */
+#etk_dialog .etk-window:not(.etk-dragging) { transition: width .2s cubic-bezier(.2, .7, .2, 1), left .2s cubic-bezier(.2, .7, .2, 1); }
+#etk_dialog:not(.etk-two) .etk-main { max-width: var(--etk-final-w, none); }
+#etk_dialog.etk-two .etk-pane-detail { animation: etk-pane-in .2s ease both; }
+@keyframes etk-pane-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { #etk_dialog .etk-window:not(.etk-dragging) { transition: none; } #etk_dialog.etk-two .etk-pane-detail { animation: none; } }
 #etk_dialog.etk-two .etk-main { display: flex; overflow: hidden; padding: 0; }
-#etk_dialog .etk-pane-list { flex: 0 0 min(436px, 50%); min-width: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 4px 10px 14px; border-right: 1px solid var(--etk-line); box-sizing: border-box; }
+/* 왼쪽 목록도 창 폭을 따라 넓어진다(고정 폭이면 창을 넓힐 때 오른쪽 칸만 늘어났다) */
+#etk_dialog .etk-pane-list { flex: 0 0 var(--etk-split, clamp(min(436px, 50%), 42%, 600px)); min-width: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding: 4px 10px 14px; border-right: 1px solid var(--etk-line); box-sizing: border-box; }
 #etk_dialog .etk-pane-detail { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* 두 칸 사이 손잡이: 보이는 것은 왼쪽 칸의 1px 선 그대로이고, 그 선 위에 자리를 차지하지 않는 12px 폭의 누르는 곳을 겹침. 맨 아래 6px 는 창 높이를 바꾸는 손잡이 자리라 비워 둠 */
+#etk_dialog .etk-split { flex: none; position: relative; z-index: 2; width: 12px; margin: 0 -6px 6px; cursor: col-resize; touch-action: none; }
+@media (hover: hover) { #etk_dialog .etk-split:hover { background: linear-gradient(to right, transparent 5px, var(--etk-accent) 5px, var(--etk-accent) 7px, transparent 7px); } }
 #etk_dialog .etk-pane-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 16px; border-bottom: 1px solid var(--etk-line); }
 #etk_dialog .etk-pane-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #etk_dialog .etk-pane-close { flex: none; padding: 6px 8px; border-radius: 8px; cursor: pointer; opacity: .6; }
 #etk_dialog .etk-pane-close:hover { opacity: 1; background: var(--etk-soft); }
 #etk_dialog .etk-pane-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 16px 16px; }
-#etk_dialog .etk-row-current { background: var(--etk-soft); box-shadow: inset 3px 0 0 var(--etk-accent); }
-#etk_dialog .etk-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--etk-line); font-size: .9em; }
-#etk_dialog .etk-foot:empty { display: none; }
-#etk_dialog .etk-foot-gap { flex: 1; }
-#etk_dialog .etk-foot > i, #etk_dialog .etk-foot-server { cursor: pointer; opacity: .6; padding: 4px; white-space: nowrap; }
-#etk_dialog .etk-foot > i:hover, #etk_dialog .etk-foot-server:hover { opacity: 1; }
-#etk_dialog .etk-foot .menu_button { flex: none; }
+/* 지금 열린 줄은 옅은 바탕만: 왼쪽에 굵은 색 띠를 두면 둥근 모서리와 만나 꺾쇠처럼 보였다 */
+#etk_dialog .etk-row-current { background: var(--etk-soft); }
+#etk_dialog .etk-row-current .etk-row-more { opacity: 1; color: var(--etk-accent); }
 /* 크기 바꾸기 손잡이(PC): 왼쪽 · 오른쪽 · 아래 가장자리와 아래 두 모서리 */
 #etk_dialog .etk-rz { position: absolute; z-index: 3; touch-action: none; }
 #etk_dialog .etk-rz-w, #etk_dialog .etk-rz-e { top: 44px; bottom: 12px; width: 6px; cursor: ew-resize; }
@@ -753,36 +819,121 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 @container (min-width: 700px) {
     #etk_dialog:not(.etk-two, .etk-in-detail) .etk-list-cols { columns: 2; column-gap: 14px; }
 }
-/* 묶음 세부 설정: 안에 든 기능마다 한 덩어리 */
-#etk_dialog .etk-bundle-desc { padding: 8px 4px 0; margin: 0; }
-#etk_dialog .etk-bundle-part + .etk-bundle-part { margin-top: 10px; border-top: 1px solid var(--etk-line); padding-top: 14px; }
-/* 목록 */
-#etk_dialog .etk-section { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; padding: 6px 4px; border-radius: 8px; font-size: .8em; font-weight: 700; cursor: pointer; user-select: none; }
-#etk_dialog .etk-section:hover { background: var(--etk-soft); }
-#etk_dialog .etk-fold-icon { font-size: .85em; opacity: .45; width: 1em; transition: transform .15s; }
-#etk_dialog .etk-section.etk-folded .etk-fold-icon { transform: rotate(-90deg); }
-#etk_dialog .etk-section > span:first-child { opacity: .55; }
-#etk_dialog .etk-section small { opacity: .5; font-weight: 400; }
-#etk_dialog .etk-section .etk-sum-all { margin-left: auto; font-weight: 400; opacity: .55; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--SmartThemeBorderColor, currentColor); white-space: nowrap; cursor: pointer; }
-#etk_dialog .etk-section .etk-sum-all:hover { opacity: 1; }
-#etk_dialog .etk-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
-#etk_dialog .etk-row:hover { background: var(--etk-soft); }
+/* 갈래 버튼(창 머리 아래): 아이콘 위 · 이름 아래, 고른 갈래만 강조색과 밑줄. 세부 설정 한 칸 화면에선 숨김 */
+#etk_dialog .etk-tabs { flex: none; display: flex; padding: 0 8px; border-bottom: 1px solid var(--etk-line); }
+#etk_dialog.etk-in-detail .etk-tabs { display: none; }
+#etk_dialog .etk-tab { flex: 1; min-width: 0; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font-size: 13px; line-height: 1.1; cursor: pointer; opacity: .62; white-space: nowrap; }
+#etk_dialog .etk-tab .etk-row-icon { width: auto; font-size: 15px; opacity: 1; color: inherit; }
+#etk_dialog .etk-tab:hover { opacity: .9; }
+/* 고른 갈래의 밑줄은 곧은 선으로: 둥근 모서리가 있으면 선 끝이 위로 말려 올라간다 */
+#etk_dialog .etk-tab.etk-on { opacity: 1; color: var(--etk-accent); font-weight: 700; border-radius: 0; box-shadow: inset 0 -2px 0 var(--etk-accent); }
+/* 목록 줄: 아이콘 · 이름과 설명 한 줄 · '설정 ›' 또는 'N개 ⌄' · 체크 */
+#etk_dialog .etk-row, #etk_dialog .etk-unit { break-inside: avoid; }
+#etk_dialog .etk-row { display: flex; align-items: center; gap: 12px; min-height: 56px; box-sizing: border-box; padding: 4px 0 4px 8px; border-radius: 8px; cursor: pointer; }
+/* 줄 전체에는 마우스를 올려도 바탕을 칠하지 않는다: 지금 열린 줄의 표시와 같은 색이라 두 줄이 같이 눌린 것처럼 보였다. 누를 수 있는 '설정 ›' 만 또렷해진다 */
+@media (hover: hover) { #etk_dialog .etk-row-more:hover { opacity: 1; } }
+#etk_dialog .etk-row-icon { flex: none; width: 24px; text-align: center; font-size: 16px; opacity: .7; }
 #etk_dialog .etk-row-text { flex: 1; min-width: 0; }
-#etk_dialog .etk-row-name { word-break: keep-all; }
-#etk_dialog .etk-row-star { margin-left: 6px; font-size: .7em; opacity: .5; color: var(--etk-accent); }
-/* 창 아래 설명 줄(손가락 기기에서 줄을 누르면): 목록 길이 · 창 크기는 그대로, 설명 줄 높이만 글에 맞춤(최대 네 줄, 넘치면 …).
-   두 줄로 고정하면 짧은 설명 아래가 비어 보였음 */
-#etk_dialog .etk-hint { flex: none; max-height: 5.8em; box-sizing: content-box; padding: 8px 14px; border-top: 1px solid var(--etk-line); font-size: .85em; line-height: 1.45; background: var(--etk-soft); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; word-break: keep-all; }
-#etk_dialog .etk-hint[hidden] { display: none; }
-#etk_dialog .etk-hint b { margin-right: 6px; }
-#etk_dialog .etk-hint span { opacity: .75; }
-#etk_dialog .etk-hint .etk-hint-state { display: block; opacity: 1; margin-top: 2px; }
-#etk_dialog .etk-row-picked { background: var(--etk-soft); }
-/* 손가락 기기: › 를 누르기 쉽게 넓힘 */
-@media (hover: none) { #etk_dialog .etk-row-go { padding: 10px 6px 10px 14px; margin: -10px -4px -10px 0; } }
-#etk_dialog .etk-row-off .etk-row-text { opacity: .55; }
-#etk_dialog .etk-row-go { flex: none; opacity: .35; font-size: .8em; }
-#etk_dialog .etk-paused-note { margin: 8px 4px 0; font-size: .9em; font-weight: 600; }
+#etk_dialog .etk-row-name { font-weight: 600; word-break: keep-all; }
+#etk_dialog .etk-row-desc { margin-top: 2px; font-size: max(13px, .85em); opacity: .62; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#etk_dialog .etk-row-off .etk-row-name { opacity: .6; }
+#etk_dialog .etk-row-off .etk-row-icon { opacity: .35; }
+#etk_dialog .etk-row-more { flex: none; font-size: max(13px, .85em); opacity: .6; white-space: nowrap; }
+/* '설정 ›' 만 눌러 들어가므로 누르는 넓이를 줄 높이만큼(40px 넘게) 넓힌다 */
+#etk_dialog .etk-row-more { position: relative; cursor: pointer; }
+/* 세부 설정이 있는 줄은 이름 쪽을 눌러도 아무 일이 없으므로 손가락 모양을 '설정 ›' 에만 둔다 */
+#etk_dialog .etk-row:has(> .etk-row-more > .fa-chevron-right) { cursor: default; }
+#etk_dialog .etk-row-more::before { content: ''; position: absolute; inset: -16px -8px; }
+#etk_dialog .etk-row-more i { font-size: 10px; margin-left: 4px; }
+#etk_dialog .etk-row .etk-pill { font-size: 13px; }
+/* 체크: 보이는 동그라미는 18px, 누르는 칸은 44x44. 안의 체크칸은 투명하게 칸 전체를 덮어 눌림을 받음(테마의 체크칸 규칙은 이김) */
+#etk_dialog .etk-tick { position: relative; flex: none; width: 44px; height: 44px; margin: 0; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+#etk_dialog .etk-tick > input.etk-check { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; opacity: 0 !important; appearance: none !important; border: 0 !important; background: none !important; box-shadow: none !important; cursor: pointer; }
+#etk_dialog .etk-tick-mark { position: relative; width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid color-mix(in srgb, currentColor 40%, transparent); pointer-events: none; }
+#etk_dialog .etk-tick > input:checked + .etk-tick-mark { background: var(--etk-accent); border-color: var(--etk-accent); }
+#etk_dialog .etk-tick > input:checked + .etk-tick-mark::after { content: ''; position: absolute; left: 5px; top: 1.6px; width: 4px; height: 8px; border: solid #fff; border-width: 0 1.7px 1.7px 0; transform: rotate(45deg); }
+#etk_dialog .etk-tick > input:disabled { cursor: default; }
+#etk_dialog .etk-tick > input:disabled + .etk-tick-mark { opacity: .35; }
+#etk_dialog .etk-tick > input:focus-visible + .etk-tick-mark { outline: 2px solid var(--etk-accent); outline-offset: 2px; }
+/* 묶음: 펼치면 그 자리에서 안쪽 줄, 묶음 줄과 안쪽은 같은 옅은 바탕 */
+/* 펼친 묶음은 아주 옅은 바탕, 지금 열린 줄은 강조색이 살짝 도는 바탕: 둘이 같은 회색이면 어느 줄이 열려 있는지 헷갈렸다 */
+#etk_dialog .etk-row.etk-opened, #etk_dialog .etk-inner { background: color-mix(in srgb, var(--SmartThemeBodyColor) 3%, transparent); }
+#etk_dialog .etk-inner { margin-bottom: 8px; }
+#etk_dialog .etk-row-current, #etk_dialog .etk-inner .etk-row-current { background: color-mix(in srgb, var(--etk-accent) 13%, transparent); }
+#etk_dialog .etk-row.etk-opened { border-radius: 8px 8px 0 0; }
+#etk_dialog .etk-inner { padding: 0 0 6px 22px; border-radius: 0 0 8px 8px; }
+#etk_dialog .etk-row.etk-row-sub { min-height: 50px; }
+#etk_dialog .etk-row.etk-row-sub .etk-row-icon { font-size: 14px; }
+#etk_dialog .etk-row.etk-row-sub .etk-row-name { font-weight: 500; }
+#etk_dialog .etk-find-group { display: flex; align-items: center; gap: 6px; margin: 10px 0 2px; padding: 0 8px; font-size: 13px; font-weight: 700; opacity: .6; }
+#etk_dialog .etk-find-group .etk-row-icon { width: auto; font-size: 13px; }
+/* 창 머리의 … 버튼과 그 자리에 뜨는 작은 목록 */
+#etk_dialog .etk-more, #etk_dialog .etk-close, #etk_dialog .etk-back, #etk_dialog .etk-pane-close { position: relative; flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; padding: 0; box-sizing: border-box; border-radius: 8px; cursor: pointer; opacity: .6; }
+#etk_dialog .etk-more:hover { opacity: 1; background: var(--etk-soft); }
+#etk_dialog.etk-in-detail .etk-more { display: none; }
+#etk_dialog .etk-more.etk-has-new::after { content: ''; position: absolute; right: 7px; top: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--etk-accent); }
+#etk_dialog .etk-menu { position: absolute; right: 10px; z-index: 4; width: 260px; max-width: calc(100% - 20px); box-sizing: border-box; padding: 6px; border-radius: 12px; border: 1px solid var(--etk-line); background: inherit; box-shadow: 0 8px 28px rgb(0 0 0 / .25); }
+#etk_dialog .etk-menu[hidden] { display: none; }
+#etk_dialog .etk-menu-item { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 4px 10px; border-radius: 8px; cursor: pointer; }
+#etk_dialog .etk-menu-item:hover { background: var(--etk-soft); }
+#etk_dialog .etk-menu-item > i { width: 18px; text-align: center; opacity: .6; }
+#etk_dialog .etk-menu-text { display: flex; flex-direction: column; min-width: 0; }
+#etk_dialog .etk-menu-text small { font-size: 13px; opacity: .6; }
+/* 서버 플러그인 화면: 맨 위 상태 한 줄(작은 동그라미 · 글 · 필요할 때만 테두리 버튼), 바뀐 것 상자, 하는 일 줄, 넣는 법 */
+#etk_dialog .etk-stat { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 2px 4px; }
+#etk_dialog .etk-stat-dot { flex: none; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; }
+#etk_dialog .etk-stat-ok { background: #22a559; }   /* 상태 색: 테마와 상관없이 같은 초록 */
+#etk_dialog .etk-stat-new, #etk_dialog .etk-stat-again { background: var(--etk-accent); }
+#etk_dialog .etk-stat-no { background: color-mix(in srgb, var(--SmartThemeBodyColor) 45%, transparent); }   /* 동그라미 글자색이 흰색이라 currentColor 로는 안 보였음 */
+#etk_dialog .etk-stat-text { flex: 1; min-width: 0; }
+#etk_dialog .etk-stat-text small { margin-left: 6px; font-size: 13px; opacity: .6; }
+#etk_dialog .etk-sbtn { position: relative; flex: none; height: 32px; padding: 0 13px; box-sizing: border-box; border-radius: 16px; border: 1px solid var(--etk-accent); color: var(--etk-accent); font-size: max(13px, .9em); font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+#etk_dialog .etk-sbtn::before { content: ''; position: absolute; inset: -5px 0; }   /* 누르는 높이 42px */
+#etk_dialog .etk-sbtn:hover { background: color-mix(in srgb, var(--etk-accent) 12%, transparent); }
+#etk_dialog .etk-what { margin: 4px 0 8px; padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--etk-accent) 12%, transparent); font-size: max(13px, .9em); line-height: 1.55; }
+#etk_dialog .etk-what > b { display: block; margin-bottom: 2px; color: var(--etk-accent); }
+#etk_dialog .etk-what > b small { margin-left: 8px; font-weight: 500; font-size: 13px; color: var(--SmartThemeBodyColor); opacity: .6; }
+#etk_dialog .etk-what ul { margin: 2px 0 0; padding-left: 18px; }
+#etk_dialog .etk-update-auto { margin: 2px 4px 6px; font-size: max(13px, .9em); }
+#etk_dialog .etk-sec-label { margin: 14px 4px 4px; font-size: 13px; opacity: .6; }
+#etk_dialog .etk-row.etk-use { padding-right: 8px; }
+/* 서버 기능의 상태 글: 작동 중은 초록 점, 휴식은 강조색, 꺼짐은 흐리게. 상자나 큰 표시 없이 글만 */
+#etk_dialog .etk-st { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: max(13px, .85em); white-space: nowrap; }
+#etk_dialog .etk-st-ok::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #22a559; }
+#etk_dialog .etk-st-rest { color: var(--etk-accent); font-weight: 600; }
+#etk_dialog .etk-st-off { opacity: .55; }
+#etk_dialog .etk-st i { font-size: 10px; opacity: .6; }
+/* 펼친 안쪽: 기능 이름(까닭은 그 아래 작은 글)과 상태. 이름이 묶음 줄의 이름과 같은 자리에서 시작하게 왼쪽을 띄움 */
+#etk_dialog .etk-inner.etk-parts { padding: 0 8px 4px 44px; }
+#etk_dialog .etk-part { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 4px 0; box-sizing: border-box; }
+#etk_dialog .etk-part-text { flex: 1; min-width: 0; font-size: max(13px, .92em); word-break: keep-all; }
+#etk_dialog .etk-part-text small { display: block; margin-top: 2px; font-size: 13px; opacity: .62; }
+#etk_dialog .etk-part-go { display: inline-flex; align-items: center; gap: 5px; min-height: 40px; font-size: 13px; color: var(--etk-accent); cursor: pointer; }
+#etk_dialog .etk-part-go i { font-size: 10px; }
+#etk_dialog .etk-row.etk-use-plain { padding-right: 8px; cursor: default; }
+/* 휴식 설명 글: 창 글자가 14px 일 때 .85em 이 12px 아래로 내려가 13px 로 받침 */
+#etk_dialog .etk-uses .etk-note { font-size: max(13px, .85em); }
+#etk_dialog .etk-install-os { display: flex; margin: 6px 0 4px; padding: 3px; border-radius: 12px; background: var(--etk-soft); }
+#etk_dialog .etk-os-tab { flex: 1; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 9px; font-size: max(13px, .9em); opacity: .6; cursor: pointer; text-align: center; }
+#etk_dialog .etk-os-tab.etk-on { opacity: 1; font-weight: 600; background: rgb(from var(--SmartThemeBlurTintColor) r g b / 1); }
+#etk_dialog .etk-step { display: flex; gap: 12px; padding: 10px 4px; line-height: 1.5; }
+#etk_dialog .etk-step > i { flex: none; font-style: normal; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--etk-accent); background: color-mix(in srgb, var(--etk-accent) 14%, transparent); }
+#etk_dialog .etk-step > div { flex: 1; min-width: 0; }
+#etk_dialog .etk-step small { display: block; font-size: 13px; opacity: .6; }
+#etk_dialog .etk-install-cmd { margin: 8px 0; padding: 10px 12px; border-radius: 10px; background: var(--etk-soft); font-size: 13px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; user-select: all; text-align: left; }
+/* 접어 둔 다른 설치 방법: 한 줄만 보이고 누르면 그 자리에서 펼쳐짐. 줄 높이 44px 가 누르는 곳 */
+#etk_dialog .etk-fold { margin-top: 4px; border-top: 1px solid var(--etk-line); }
+#etk_dialog .etk-fold > summary { list-style: none; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; font-size: max(13px, .9em); font-weight: 400; opacity: .7; cursor: pointer; }
+#etk_dialog .etk-fold > summary::-webkit-details-marker { display: none; }
+#etk_dialog .etk-fold > summary i { font-size: 10px; transition: transform .2s; }
+#etk_dialog .etk-fold[open] > summary { opacity: 1; }
+#etk_dialog .etk-fold[open] > summary i { transform: rotate(180deg); }
+/* 파일 이름 글자: 테마가 코드 글자를 밝은 색으로 바꾸면 밝은 창에서 안 보여서 창 글자색을 그대로 씀. 긴 이름은 먼저 다음 줄로 넘기고 그래도 넘칠 때만 끊음 */
+#etk_dialog .etk-fold code { font-size: max(13px, .88em); color: inherit; border: 0; overflow-wrap: anywhere; }
+#etk_dialog .etk-tab-icon-tools { display: flex; align-items: center; gap: 8px; margin: 10px 0 4px; }
+#etk_dialog .etk-tab-icon-now { width: 32px; height: 32px; object-fit: contain; }
+#etk_dialog .etk-tab-icon-note { display: block; font-size: 13px; opacity: .6; }
+#etk_dialog .etk-paused-note { margin: 8px 4px 0; font-size: max(13px, .9em); font-weight: 600; }
 /* 세부 설정 화면 */
 #etk_dialog .etk-detail { padding: 8px 4px; }
 #etk_dialog .etk-detail-on { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; cursor: pointer; font-weight: 600; }
@@ -796,7 +947,6 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
     #etk_dialog .etk-handle { display: block; position: absolute; top: 6px; left: 50%; width: 42px; height: 5px; margin-left: -21px; border-radius: 9px; background: currentColor; opacity: .25; }
     #etk_dialog .etk-grip { display: none; }
     #etk_dialog .etk-rz { display: none; }
-    #etk_dialog .etk-row { padding: 8px 8px; }
 }
 
 /* 채팅 파일 관리 창 보기 쉽게: 실리태번 창 안에 정렬 · 선택 줄, 줄마다 정보 한 줄 · 펼쳐 보기.
@@ -836,6 +986,9 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 /* 펼침 표시: 돌리면(transform) 안쪽 여백이 한쪽만 있어 아이콘이 옆으로 밀리며 움직였음 → 돌리지 않고 같은 자리에서 모양만 ∨ · ∧ 로 바꿈 */
 #select_chat_div.etk-cfl .etk-cfl-more { flex: none; width: 1.6em; padding: 2px 0; text-align: center; opacity: .45; font-size: .75em; cursor: pointer; }
 #select_chat_div.etk-cfl .etk-cfl-more:hover { opacity: 1; }
+#select_chat_div.etk-cfl .etk-cfl-rename { flex: none; width: 1.8em; padding: 2px 0; text-align: center; opacity: .45; font-size: .75em; cursor: pointer; }
+#select_chat_div.etk-cfl .etk-cfl-rename:hover { opacity: 1; }
+#select_chat_div.etk-cfl.etk-cfl-selecting .etk-cfl-rename { display: none; }
 #select_chat_div.etk-cfl .etk-cfl-open .etk-cfl-more::before { content: '\f077'; }
 #select_chat_div.etk-cfl .etk-cfl-open .select_chat_block_mes { display: none; }
 #select_chat_div.etk-cfl .etk-cfl-check { display: none; flex: none; margin: 16px 2px 0 4px !important; pointer-events: none; }
@@ -879,14 +1032,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 /* NEW 알약: 버전 옆 내역 NEW 와 같은 모양(빨강) — 새 기능 줄 · 그 묶음 제목 · 아래 줄 '서버'(새 판 · 서버를 다시 켜야 할 때) */
 /* 설정 창 안의 NEW 는 작고 차분하게(옅은 빨강 바탕 + 빨강 글자): 진한 빨강 알약은 너무 커 보이고 눈을 끌었음 */
 /* 'NEW' 네모 알약은 글자 옆 자리를 크게 차지했음 → 글자 오른쪽 위에 작은 동그라미 N(위첨자처럼) */
-#etk_dialog .etk-new-badge, #etk_dialog .etk-foot-server.etk-has-new::after { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 15px; min-width: 15px; height: 15px; margin-left: 2px; padding: 0; border-radius: 999px; font-size: 9.5px !important; font-weight: 700; line-height: 1; letter-spacing: 0; background: rgba(229, 72, 77, .16); color: #d9363e; vertical-align: top; position: relative; top: -2px; opacity: 1; }
-#etk_dialog .etk-foot-server.etk-has-new::after { content: 'N'; }
-#etk_dialog .etk-section .etk-new-badge { opacity: 1; font-weight: 700; margin-left: -6px; align-self: flex-start; margin-top: 0; top: 0; }   /* 묶음 제목은 칸 사이 틈(8px)이 있어 N 이 글자에서 떨어졌음 → 틈을 되돌려 글자 오른쪽 위에 붙임 */
-/* NEW 알약이 흐려지지 않게: 묶음 제목 · 아래 줄 '서버'는 칸 전체를 흐리게(opacity) 해 두어 그 안의 알약까지 흐렸음 → 칸은 그대로, 알약 말고 나머지만 흐리게 */
-#etk_dialog .etk-section { opacity: 1; }
-#etk_dialog .etk-section > *:not(.etk-new-badge) { filter: opacity(.55); }
-#etk_dialog .etk-foot-server { opacity: 1; color: color-mix(in srgb, currentColor 60%, transparent); }
-#etk_dialog .etk-foot-server:hover { color: inherit; }
+#etk_dialog .etk-new-badge { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 15px; min-width: 15px; height: 15px; margin-left: 2px; padding: 0; border-radius: 999px; font-size: 9.5px !important; font-weight: 700; line-height: 1; letter-spacing: 0; background: rgba(229, 72, 77, .16); color: #d9363e; vertical-align: top; position: relative; top: -2px; opacity: 1; }
 #etk_dialog .etk-restart-note { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; font-size: .88em; background: rgba(230, 160, 40, .16); border: 1px solid rgba(230, 160, 40, .35); }
 #etk_dialog .etk-restart-note i { margin-right: 4px; opacity: .7; }
 
@@ -1298,6 +1444,8 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
    선택 중엔 체크 칸을 줄 상자 왼쪽에 붙임 */
 .etk-xp-side .etk-wip-book { margin-left: 22px; padding-left: 12px !important; }
 .etk-xp-side .etk-wip-book:has(> .etk-xp-pickbox) { padding-left: 6px !important; }
+/* 안쪽 줄 체크칸만 묶음 체크칸보다 더 안쪽으로(이름 자리는 그대로): 체크칸 오른쪽 여백을 줄여 그만큼 옮김 */
+.etk-xp-side .etk-wip-book > .etk-xp-pickbox { margin-left: -6px; padding-right: 0; margin-right: 0; }
 /* 월드인포 항목: 테마가 항목 상자 안팎에 준 여백(위 10 · 안 10 · 머리 줄 8~12px)이 겹쳐 목록이 듬성듬성해서 줄임 */
 #WorldInfo.etk-wip .world_entry > .world_entry_form { margin-top: 6px !important; padding: 6px !important; }
 #WorldInfo.etk-wip .world_entry > .world_entry_form > .inline-drawer > .inline-drawer-header { padding-top: 0 !important; padding-left: 4px !important; padding-right: 4px !important; }
@@ -1317,3 +1465,23 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 .etk-xp-side .etk-wip-fhead .etk-xp-ticon::before { vertical-align: baseline !important; position: static !important; }
 /* 묶음 줄: 안의 기능이 일부만 켜져 있을 때 */
 #etk_dialog .etk-row-part { margin-left: 8px; opacity: .65; font-weight: 400; }
+
+
+/* 답 받는 중 표시 */
+#chat .mes .mes_text[data-etk-stream-progress]::after { content: attr(data-etk-stream-progress); display: block; clear: both; margin: 6px 0 2px; font-size: .8em; font-style: normal; font-weight: 400; text-align: start; opacity: .6; font-variant-numeric: tabular-nums; }
+#etk_dialog .etk-restart-row { margin-bottom: 8px; }
+#etk_dialog .etk-server-restart { flex: none; width: auto; margin: 0; white-space: nowrap; }
+/* 고르기: 묶음 체크칸과 묶음 이름 사이를 안쪽 줄(체크칸 · 이름)과 같은 간격으로 */
+.etk-xp-side .etk-wip-fhead .etk-wip-fall.etk-wip-fall { margin: 0 10px 0 2px; }   /* 체크칸은 접기 화살표 쪽으로 붙이고 이름 자리는 그대로 */
+
+.etk-update-note > b { margin-right: 6px; }
+.etk-update-note > .etk-update-ver { display: inline-block; margin-right: 8px; padding: 0 7px; border: 1px solid color-mix(in srgb, currentColor 35%, transparent); border-radius: 6px; font-size: .85em; font-variant-numeric: tabular-nums; opacity: .8; }
+
+/* 세부 설정 본문 맨 위의 체크 줄(기능이 그리는 '확장 창에도 보이기', 끼워 넣는 '마법봉 메뉴에도 보이기')과 그 설명: 줄마다 같은 간격 · 같은 왼쪽 세로줄.
+   체크칸의 바깥 여백을 없애 체크칸과 설명 글이 같은 자리에서 시작하고, 설명 아래를 띄워 다음 체크 줄과 한 덩이로 붙어 보이지 않게 함.
+   본문 내용이 스스로 안쪽 여백을 갖는 기능은 --etk-check-inset 에 그 여백을 적어 같은 세로줄에 맞춤 */
+:is(.etk-options, .etk-quick-options) > :is(label:has(> [data-k="separate"]), label.etk-wand-check) { display: flex; align-items: center; gap: 8px; min-height: 40px; margin: 0; padding: 0 var(--etk-check-inset, 0px); }
+:is(.etk-options, .etk-quick-options) > :is(label:has(> [data-k="separate"]), label.etk-wand-check) > input { flex: none; margin: 0; }
+:is(.etk-options, .etk-quick-options) > :is(label:has(> [data-k="separate"]) + small, small.etk-wand-check) { display: block; margin: 0 0 12px; padding: 0 var(--etk-check-inset, 0px); font-size: max(13px, .85em); line-height: 1.5; }
+:is(.etk-options, .etk-quick-options):has(> .etk-snd) { --etk-check-inset: 16px; }
+#etk_dialog .etk-detail[data-id="done_sound"] > .etk-options { --etk-check-inset: 6px; }   /* 이 화면에선 본문을 옆으로 10px 넓혀 둠(위 규칙) */

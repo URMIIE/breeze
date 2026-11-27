@@ -1,0 +1,674 @@
+/* Prompt Folders — 프롬프트 관리자 그룹 */
+
+.etk-pg-pos { display: inline-block; min-width: 1.8em; margin-right: 2px; font-size: .75em; opacity: .5; font-variant-numeric: tabular-nums; }
+
+/* ---------- 그룹: 배경·색 띠 없이, 이름 앞 작은 색 점 + 옅은 안내선 ---------- */
+#completion_prompt_manager_list {
+    --etk-pg-muted: color-mix(in srgb, var(--SmartThemeBodyColor) 58%, transparent);
+    --etk-pg-line: color-mix(in srgb, var(--SmartThemeBodyColor) 14%, transparent);
+}
+.etk-pg-group { list-style: none; margin: 0; }
+.etk-pg-group:not(.etk-pg-sub) + .etk-pg-group:not(.etk-pg-sub) { border-top: 1px solid var(--etk-pg-line); }
+.etk-pg-group-head { display: flex; align-items: center; gap: 8px; min-height: var(--etk-pg-row-h, 34px);  /* 테마의 프롬프트 줄 높이를 재서 맞춤(index.js syncRowMetrics) */ padding: 3px 4px 3px 2px; border-radius: 6px; cursor: pointer; user-select: none; transition: background-color .12s; }
+.etk-pg-group-head:hover { background: color-mix(in srgb, var(--SmartThemeBodyColor) 6%, transparent); }
+.etk-pg-caret { flex: none; width: 14px; font-size: .62em; color: var(--etk-pg-muted); text-align: center; }
+.etk-pg-folder { display: none; }
+.etk-pg-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.etk-pg-group:not(.etk-pg-sub) > .etk-pg-group-head > .etk-pg-name { font-weight: 600; }
+.etk-pg-name::before { content: ''; display: inline-block; width: 7px; height: 7px; margin: 0 8px 1px 0; border-radius: 50%; background: var(--etk-pg-color, var(--etk-pg-muted)); vertical-align: middle; }
+.etk-pg-count { flex: none; font-size: .82em; color: var(--etk-pg-muted); font-variant-numeric: tabular-nums; }
+/* 단추 크기 규칙은 그룹 머리줄 안에서만 — 클래스 이름이 같은 다른 화면의 글자 단추까지 26px 상자로 줄어들었음(2026-11-07) */
+.etk-pg-group-head .etk-pg-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 5px; cursor: pointer; color: var(--etk-pg-muted); }
+.etk-pg-group-head .etk-pg-btn:hover { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeBodyColor) 9%, transparent); }
+.etk-pg-toggle-all.fa-toggle-on { color: var(--SmartThemeBodyColor); }
+.etk-pg-group-head.etk-pg-drop-target { background: color-mix(in srgb, var(--SmartThemeQuoteColor) 14%, transparent); box-shadow: inset 0 0 0 1px var(--SmartThemeQuoteColor); }
+body.etk-pg-dragging, body.etk-pg-dragging * { user-select: none !important; cursor: grabbing !important; }
+.etk-pg-ghost { position: fixed; z-index: 10001; pointer-events: none; max-width: 260px; padding: 4px 10px; border-radius: 6px; font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--SmartThemeBlurTintColor, #222); border: 1px solid var(--SmartThemeBorderColor, #555); box-shadow: 0 4px 12px rgba(0,0,0,.35); opacity: .92; }
+.etk-pg-drop-line { position: fixed; z-index: 10000; height: 2px; border-radius: 1px; pointer-events: none; background: var(--SmartThemeQuoteColor, #e8a33d); display: none; }
+.etk-pg-drag-source { opacity: .4; }
+#completion_prompt_manager_list .drag-handle { touch-action: none; }
+
+.etk-pg-group-body { list-style: none; margin: 0 0 4px 8px; padding: 0 0 0 9px; border-left: 1px solid var(--etk-pg-line); }
+.etk-pg-collapsed > .etk-pg-group-body { display: none; }
+/* 접힌 그룹: 줄을 감싼 칸째 숨김 — 테마가 프롬프트 줄에 display 를 !important 로 걸어도 칸이 숨어 있으면 안 보임 */
+html body #completion_prompt_manager #completion_prompt_manager_list li.etk-pg-group.etk-pg-collapsed > ul.etk-pg-group-body { display: none !important; }
+.etk-pg-clone { cursor: default; }
+
+.etk-pg-tag { display: inline-block; margin-left: 8px; font-size: .74em; color: var(--etk-pg-muted); vertical-align: middle; white-space: nowrap; }
+.etk-pg-tag::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%; background: var(--etk-pg-color); vertical-align: middle; }
+
+
+.etk-pg-menu { position: fixed; z-index: 10000; min-width: 200px; max-width: 320px; max-height: 70vh; overflow-y: auto; padding: 4px; border-radius: 8px; background: var(--SmartThemeBlurTintColor, #222); border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 14%, transparent); box-shadow: 0 6px 20px rgba(0,0,0,.18); backdrop-filter: blur(var(--SmartThemeBlurStrength, 10px)); font-size: .92em; }
+.etk-pg-menu-info { padding: 4px 12px; font-size: .8em; opacity: .6; }
+.etk-pg-menu-item { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 5px; cursor: pointer; }
+.etk-pg-menu-item:hover, .etk-pg-menu-item:focus-visible { background: color-mix(in srgb, var(--SmartThemeBodyColor, #fff) 10%, transparent); }
+.etk-pg-menu-item i { width: 1.1em; text-align: center; opacity: .6; font-size: .92em; }
+.etk-pg-menu-sep { margin: 4px -4px 0; padding: 6px 14px 2px; font-size: .75em; opacity: .55; border-top: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 12%, transparent); }
+.etk-pg-menu-sep:empty { padding: 0; }
+.etk-pg-menu-danger { color: var(--warning, #e57373); }
+.etk-pg-menu-target span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ST가 목록의 모든 li를 3칸 grid로 만드는 규칙을 그룹 상자에서는 끔 (그룹 머리와 내용이 옆으로 갈라지던 문제) */
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-group { display: block; margin-bottom: 0; }
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-group.etk-pg-sub { width: auto; }
+#completion_prompt_manager #completion_prompt_manager_list .etk-pg-group-body > li.etk-pg-clone { margin-bottom: 1px; }
+
+/* 끄는 동안 목록 맨 끝에 생기는 칸: 맨 끝(그룹 밖)으로 */
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-end-zone { display: block; list-style: none; margin: 6px 0 2px; padding: 10px; text-align: center; font-size: .85em; opacity: .7; border: 1px dashed color-mix(in srgb, var(--SmartThemeBodyColor) 30%, transparent); border-radius: 6px; }
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-end-zone.etk-pg-end-active { opacity: 1; border-color: var(--SmartThemeQuoteColor, #e8a33d); background: color-mix(in srgb, var(--SmartThemeQuoteColor, #e8a33d) 15%, transparent); }
+/* Long toggle names wrap to two lines (setting) */
+body.etk-pg-wrap-names #completion_prompt_manager #completion_prompt_manager_list .completion_prompt_manager_prompt_name { white-space: normal !important; text-overflow: clip !important; display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; word-break: keep-all; overflow-wrap: anywhere; line-height: 1.25; }
+
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-filtered { display: none !important; }
+.etk-pg-color-input { position: fixed; left: 50%; top: 50%; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.etk-pg-settings .etk-pg-help { display: block; margin-bottom: 6px; opacity: .8; }
+
+/* ---------- 도구 줄: 항상 한 줄, 검색 + 테두리 없는 아이콘 ---------- */
+.etk-pg-toolbar {
+    --etk-pg-muted: color-mix(in srgb, var(--SmartThemeBodyColor) 60%, transparent);
+    --etk-pg-line: color-mix(in srgb, var(--SmartThemeBodyColor) 16%, transparent);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 1 1 100%;   /* 프롬프트 관리자 칸이 줄바꿈 flex 라 폭을 다 차지해야 오른쪽으로 감 */
+    width: 100%;
+    box-sizing: border-box;
+    gap: 2px;
+    margin: 2px 0 8px;
+}
+.etk-pg-toolbar .etk-pg-search {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex: 1;
+    min-width: 0;
+    height: 32px;
+    margin: 0 4px 0 0;
+    padding: 0 10px;
+    border: 1px solid var(--etk-pg-line);
+    border-radius: 7px;
+    color: var(--etk-pg-muted);
+    transition: border-color .12s;
+}
+.etk-pg-toolbar .etk-pg-search:focus-within { border-color: var(--SmartThemeQuoteColor); color: var(--SmartThemeBodyColor); }
+.etk-pg-toolbar .etk-pg-search i { font-size: .82em; }
+.etk-pg-toolbar .etk-pg-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--SmartThemeBodyColor);
+    font-size: calc(var(--mainFontSize) * 0.92);
+}
+.etk-pg-toolbar .etk-pg-search input::placeholder { color: var(--etk-pg-muted); }
+.etk-pg-toolbar .etk-pg-search input::-webkit-search-cancel-button { cursor: pointer; }
+.etk-pg-ib {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 2.15em;    /* 테마 글자 크기를 따라감 (예전 30px 고정) */
+    height: 2.15em;
+    box-sizing: border-box;
+    padding: 0;
+    border-radius: 6px;
+    color: var(--etk-pg-muted);
+    cursor: pointer;
+    transition: background-color .12s, color .12s;
+}
+.etk-pg-ib:hover { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeBodyColor) 9%, transparent); }
+@media (hover: none) { .etk-pg-ib:hover { background: none; } .etk-pg-ib:active { background: color-mix(in srgb, var(--SmartThemeBodyColor) 9%, transparent); } }  /* 터치: 누른 뒤 회색 칸이 남지 않게 */
+.etk-pg-ib[aria-pressed="true"] { color: var(--SmartThemeQuoteColor); background: color-mix(in srgb, var(--SmartThemeQuoteColor) 12%, transparent); }
+.etk-pg-ib:focus-visible, .etk-pg-tb:focus-visible, .etk-pg-group-head:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: -2px; }
+
+
+@media (pointer: coarse) {
+    .etk-pg-ib { width: 2.6em; height: 2.6em; }
+    .etk-pg-toolbar > .etk-pg-ib:last-child { width: 1.9em; }  /* 맨 끝 단추만 좁게 — 아이콘은 가운데 그대로, 오른쪽 끝이 위 줄과 거의 맞음 */
+    .etk-pg-toolbar .etk-pg-search { height: 36px; }
+    .etk-pg-group-head { padding: 6px 8px; }
+    .etk-pg-group-head .etk-pg-btn { padding: 4px 6px; }
+}
+
+/* ---------- 그룹 색 표시 방식 (설정: 점 / 색 띠 / 없음) ---------- */
+body.etk-pg-color-none .etk-pg-name::before,
+body.etk-pg-color-none .etk-pg-tag::before { display: none; }
+body.etk-pg-color-bar .etk-pg-name::before { display: none; }
+/* 띠는 box-shadow 대신 배경 그라데이션 — 테마가 `* { box-shadow: none !important }` 를 걸면 띠가 사라졌음 */
+body.etk-pg-color-bar .etk-pg-group-head { --etk-pg-bar: var(--etk-pg-color); --etk-pg-tint: transparent; background: linear-gradient(to right, var(--etk-pg-bar) 0 3px, var(--etk-pg-tint) 3px); border-radius: 0 6px 6px 0; }   /* 여백은 점·없음과 같게(글자 자리 그대로) */
+body.etk-pg-color-bar .etk-pg-group:not(.etk-pg-sub) > .etk-pg-group-head { --etk-pg-tint: color-mix(in srgb, var(--etk-pg-color) 10%, transparent); }
+body.etk-pg-color-bar .etk-pg-group:not(.etk-pg-sub) > .etk-pg-group-head:hover { --etk-pg-tint: color-mix(in srgb, var(--etk-pg-color) 16%, transparent); }
+/* 하위 그룹(색 = 큰 그룹 색)은 띠를 연하게 */
+body.etk-pg-color-bar .etk-pg-group.etk-pg-sub > .etk-pg-group-head { --etk-pg-bar: color-mix(in srgb, var(--etk-pg-color) 55%, transparent); --etk-pg-tint: color-mix(in srgb, var(--etk-pg-color) 5%, transparent); }
+body.etk-pg-color-bar .etk-pg-group.etk-pg-sub > .etk-pg-group-head:hover { --etk-pg-tint: color-mix(in srgb, var(--etk-pg-color) 9%, transparent); }
+body.etk-pg-color-bar .etk-pg-group-head.etk-pg-drop-target { --etk-pg-tint: color-mix(in srgb, var(--SmartThemeQuoteColor) 14%, transparent); }
+body.etk-pg-color-bar .etk-pg-group-body { border-left-color: color-mix(in srgb, var(--etk-pg-color) 45%, transparent); }
+
+/* ---------- 그룹 편집 창 ---------- */
+.etk-pg-editor {
+    --etk-pg-muted: color-mix(in srgb, var(--SmartThemeBodyColor) 58%, transparent);
+    --etk-pg-line: color-mix(in srgb, var(--SmartThemeBodyColor) 14%, transparent);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    text-align: left;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+.etk-pg-ed-title { margin: 0 0 2px; font-size: 1.1em; }
+.etk-pg-ed-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.etk-pg-ed-field { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: .85em; color: var(--etk-pg-muted); }
+.etk-pg-ed-field .text_pole { width: 100%; box-sizing: border-box; margin: 0; font-size: calc(var(--mainFontSize) * 1); color: var(--SmartThemeBodyColor); }
+.etk-pg-ed-bar { display: flex; align-items: center; gap: 4px; }
+.etk-pg-ed-bar .etk-pg-search {
+    display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; height: 32px; margin: 0 4px 0 0; padding: 0 10px;
+    border: 1px solid var(--etk-pg-line); border-radius: 7px; color: var(--etk-pg-muted);
+}
+.etk-pg-ed-bar .etk-pg-search:focus-within { border-color: var(--SmartThemeQuoteColor); }
+.etk-pg-ed-bar .etk-pg-search input { flex: 1; min-width: 0; height: 100%; margin: 0; padding: 0; border: 0; outline: 0; background: transparent; box-shadow: none; color: var(--SmartThemeBodyColor); }
+/* 테마가 입력칸마다 테두리 · 바탕을 입혀도 검색칸 안쪽은 한 겹으로 */
+.etk-pg-ed-bar .etk-pg-search input:not(#etk_pg_x):not(#etk_pg_y):not(#etk_pg_z) { margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important; height: 100% !important; min-height: 0 !important; width: auto !important; }
+.etk-pg-editor .etk-pg-tb { all: unset; box-sizing: border-box; flex: none; padding: 6px 10px; border-radius: 6px; cursor: pointer; color: var(--etk-pg-muted); white-space: nowrap; font-size: .9em; }
+.etk-pg-editor .etk-pg-tb:hover { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeBodyColor) 9%, transparent); }
+.etk-pg-ed-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2px 8px; font-size: .8em; color: var(--etk-pg-muted); }
+.etk-pg-ed-count { font-weight: 600; color: var(--SmartThemeBodyColor); font-variant-numeric: tabular-nums; }
+.etk-pg-ed-list { list-style: none; margin: 0; padding: 0; max-height: min(52vh, 520px); overflow-y: auto; border: 1px solid var(--etk-pg-line); border-radius: 8px; user-select: none; }
+.etk-pg-ed-row { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 4px 10px; border-bottom: 1px solid var(--etk-pg-line); cursor: pointer; }
+.etk-pg-ed-row:last-child { border-bottom: 0; }
+.etk-pg-ed-row:hover { background: color-mix(in srgb, var(--SmartThemeBodyColor) 5%, transparent); }
+.etk-pg-ed-row.etk-pg-ed-sel { background: color-mix(in srgb, var(--SmartThemeQuoteColor) 13%, transparent); }
+.etk-pg-ed-row input { flex: none; margin: 0; pointer-events: none; }
+.etk-pg-ed-pos { flex: none; min-width: 2.2em; font-size: .75em; color: var(--etk-pg-muted); font-variant-numeric: tabular-nums; }
+.etk-pg-ed-name-text { flex: 1; min-width: 0; overflow-wrap: anywhere; line-height: 1.3; }
+.etk-pg-ed-off .etk-pg-ed-name-text { color: var(--etk-pg-muted); }
+.etk-pg-ed-div .etk-pg-ed-name-text { font-weight: 600; }
+.etk-pg-ed-tag { flex: 0 1 auto; max-width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .74em; color: var(--etk-pg-muted); }
+.etk-pg-ed-tag::before { content: ''; display: inline-block; width: 6px; height: 6px; margin: 0 5px 1px 0; border-radius: 50%; background: var(--etk-pg-color); vertical-align: middle; }
+body.etk-pg-color-none .etk-pg-ed-tag::before { display: none; }
+.etk-pg-set-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 4px 0 6px; }
+.etk-pg-set-row > span { flex: none; white-space: nowrap; }
+.etk-pg-set-row select { width: auto; min-width: 0; max-width: 100%; flex: 0 1 auto; margin: 0; }
+@media (max-width: 600px) {
+    .etk-pg-ed-fields { grid-template-columns: 1fr; }
+    .etk-pg-ed-list { max-height: 50vh; }
+}
+@media (pointer: coarse) { .etk-pg-ed-row { min-height: 44px; } }
+
+/* 그룹 색 견본 */
+.etk-pg-swatches { display: grid; grid-template-columns: repeat(5, 28px); gap: 8px; padding: 6px 10px 8px; }
+.etk-pg-swatch { all: unset; box-sizing: border-box; width: 28px; height: 28px; border-radius: 50%; background: var(--sw); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.etk-pg-swatch:hover { transform: scale(1.08); }
+.etk-pg-swatch.etk-pg-swatch-on { box-shadow: 0 0 0 2px var(--SmartThemeBlurTintColor, #fff), 0 0 0 4px var(--sw); }
+.etk-pg-swatch:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 2px; }
+.etk-pg-swatch-mini { width: 14px; height: 14px; flex: none; }
+.etk-pg-swatch-mini.etk-pg-swatch-on { box-shadow: 0 0 0 2px var(--SmartThemeBlurTintColor, #fff), 0 0 0 3px var(--sw); }
+
+.etk-pg-ed-summary { margin-top: -6px; font-size: .82em; color: var(--etk-pg-muted); }
+.etk-pg-ed-filter { display: flex; gap: 4px; flex-wrap: wrap; }
+.etk-pg-ed-chip { all: unset; box-sizing: border-box; padding: 4px 11px; border-radius: 999px; border: 1px solid var(--etk-pg-line); font-size: .85em; color: var(--etk-pg-muted); cursor: pointer; }
+.etk-pg-ed-chip:hover { color: var(--SmartThemeBodyColor); }
+.etk-pg-ed-chip[aria-checked="true"] { color: var(--SmartThemeBodyColor); border-color: transparent; background: color-mix(in srgb, var(--SmartThemeBodyColor) 12%, transparent); }   /* 굵게 하지 않음 — 글자 폭이 바뀌어 옆 칩이 밀림 */
+.etk-pg-ed-chip:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 1px; }
+
+/* 자동 그룹 미리보기 */
+
+
+/* 하나만 켜기 표시 */
+.etk-pg-one { flex: none; padding: 0 6px; border-radius: 999px; font-size: .7em; line-height: 1.6; color: var(--etk-pg-muted); border: 1px solid var(--etk-pg-line); }
+.etk-pg-btn-idle { opacity: .45; cursor: default; }
+/* 그룹이 없을 때 안내 */
+
+/* 그룹 안 토글에도 끌기 손잡이 보이기 — 실리태번은 끌기 표시가 없는 줄의 손잡이를 숨김 */
+/* 손잡이는 실리태번처럼 줄 왼쪽 칸에 (숫자·이름과 안 겹치게 줄 왼쪽에 자리를 비움) */
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-clone { position: relative; padding-left: 26px !important; }
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-clone .drag-handle { display: flex !important; cursor: grab; }
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-clone .prompt-manager-inspect-action { cursor: pointer; }
+#completion_prompt_manager #completion_prompt_manager_list .prompt-manager-inspect-action { -webkit-user-drag: none; }
+.etk-pg-ed-row[hidden] { display: none !important; }
+
+
+
+.etk-pg-auto-ai { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 8px 0 4px; }
+.etk-pg-auto-ai .menu_button { display: inline-flex; align-items: center; gap: 6px; margin: 0; width: auto; padding: 5px 12px; }
+.etk-pg-auto-ai-note { opacity: .65; font-size: .82em; flex: 1 1 180px; }
+
+.etk-pg-set-ai { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.etk-pg-auto-ai .menu_button.etk-pg-busy { opacity: .85; }
+
+/* AI 묶기 연결 고르기 */
+.etk-pg-ai-conn { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.etk-pg-ai-modes { display: inline-flex; flex-wrap: nowrap; gap: 2px; padding: 2px; border-radius: 8px; background: color-mix(in srgb, var(--SmartThemeBodyColor) 7%, transparent); width: fit-content; max-width: 100%; }
+.etk-pg-ai-modes button { all: unset; box-sizing: border-box; padding: 5px 10px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; border-radius: 6px; cursor: pointer; font-size: .88em; opacity: .7; white-space: nowrap; }
+.etk-pg-ai-modes button:hover { opacity: 1; }
+.etk-pg-ai-modes button[aria-checked="true"] { opacity: 1; background: var(--SmartThemeBlurTintColor, rgba(127,127,127,.15)); box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.etk-pg-ai-modes button:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 1px; }
+.etk-pg-ai-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+.etk-pg-ai-fields[hidden] { display: none !important; }
+.etk-pg-ai-fields label { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: .85em; }
+.etk-pg-ai-fields label > span { opacity: .7; }
+.etk-pg-ai-fields select, .etk-pg-ai-fields input { margin: 0; width: 100%; min-width: 0; box-sizing: border-box; }
+.etk-pg-ai-fields input.etk-pg-ai-custom { margin-top: 4px; }
+.etk-pg-ai-fields input[hidden] { display: none !important; }
+.etk-pg-ai-now { opacity: .7; }
+
+.etk-pg-ai-notice { text-align: left; }
+.etk-pg-ai-notice h3 { margin: 0 0 8px; padding-top: .2em; line-height: 1.35; }   /* 창 안쪽 칸이 넘친 부분을 잘라서, 기울인 제목 글꼴의 키 큰 한글(묶 등) 윗부분이 잘리던 것 */
+.etk-pg-ai-notice ul { margin: 0 0 12px; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; }
+
+.etk-pg-ai-fields label[hidden] { display: none !important; }
+.etk-pg-ai-reload { all: unset; cursor: pointer; margin-left: 4px; opacity: .6; font-size: .9em; }
+.etk-pg-ai-reload:hover { opacity: 1; }
+.etk-pg-ai-reload[hidden] { display: none; }
+.etk-pg-ai-reload.etk-pg-spin i { animation: fa-spin 1s linear infinite; }
+
+/* 한국어 낱말이 줄 끝에서 쪼개지지 않게 */
+.etk-pg-editor, .etk-pg-auto, .etk-pg-ai-notice, .etk-pg-settings, .etk-pg-menu, .etk-pg-toolbar, #completion_prompt_manager_list .etk-pg-group-head { word-break: keep-all; overflow-wrap: anywhere; }
+
+/* 그룹 편집기 (한 창): 왼쪽 그룹 · 오른쪽 토글 */
+.etk-pg-be { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.etk-pg-be-panes { display: grid; grid-template-columns: minmax(260px, 40%) minmax(0, 1fr); gap: 12px; min-height: 0; }
+.etk-pg-be-groups, .etk-pg-be-items { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.etk-pg-be-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.etk-pg-be-tree { list-style: none; margin: 0; padding: 4px; max-height: min(56vh, 560px); overflow-y: auto; border: 1px solid var(--etk-pg-line); border-radius: 8px; }
+.etk-pg-be-g { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 7px; cursor: pointer; }
+.etk-pg-be-g:hover { background: color-mix(in srgb, var(--SmartThemeBodyColor) 5%, transparent); }
+/* 고른 그룹: 그룹 색 얇은 테두리 + 옅은 바탕, 점에 고리 */
+.etk-pg-be-g.etk-pg-be-sel { background: color-mix(in srgb, var(--etk-pg-color, var(--SmartThemeQuoteColor)) 12%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--etk-pg-color, var(--SmartThemeQuoteColor)) 75%, transparent); }
+.etk-pg-be-sel .etk-pg-be-dot { box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--etk-pg-color, var(--SmartThemeQuoteColor)) 30%, transparent); }
+.etk-pg-be-g.etk-pg-be-sub { margin-left: calc(var(--etk-pg-depth, 1) * 16px); }
+.etk-pg-be-none { grid-template-columns: 10px minmax(0, 1fr) auto; margin-top: 4px; border-top: 1px dashed var(--etk-pg-line); border-radius: 0 0 7px 7px; color: var(--etk-pg-muted); }
+.etk-pg-be-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--etk-pg-color, var(--etk-pg-line)); }
+.etk-pg-be-none .etk-pg-be-dot { background: transparent; border: 1px dashed var(--etk-pg-muted); }
+.etk-pg-be-name.text_pole { margin: 0; min-width: 0; width: 100%; box-sizing: border-box; padding: 3px 6px; font-size: .92em; background: transparent; border-color: transparent; }
+.etk-pg-be-g:not(.etk-pg-be-sub) > .etk-pg-be-name { font-weight: 600; }
+.etk-pg-be-name.text_pole:focus { border-color: var(--etk-pg-line); background: var(--SmartThemeBlurTintColor); }
+.etk-pg-be-n { font-size: .78em; color: var(--etk-pg-muted); font-variant-numeric: tabular-nums; }
+.etk-pg-be-ic { all: unset; box-sizing: border-box; min-width: 24px; height: 24px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; font-size: .78em; color: var(--etk-pg-muted); cursor: pointer; white-space: nowrap; }
+.etk-pg-be-ic:hover { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeBodyColor) 9%, transparent); }
+.etk-pg-be-ic.on { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--etk-pg-color, var(--SmartThemeQuoteColor)) 25%, transparent); }
+.etk-pg-be-empty { padding: 10px 8px; color: var(--etk-pg-muted); font-size: .85em; list-style: none; }
+.etk-pg-be-items .etk-pg-ed-list { max-height: min(46vh, 460px); }
+.etk-pg-be-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--etk-pg-line); border-radius: 8px; background: var(--SmartThemeBlurTintColor); }
+.etk-pg-be-actions .menu_button { margin: 0; width: auto; padding: 5px 12px; }
+.etk-pg-be-actions .menu_button:disabled { opacity: .45; pointer-events: none; }
+.etk-pg-be-actions .etk-pg-ed-count { margin-right: auto; }
+.etk-pg-be-actions.etk-pg-be-idle > * { opacity: .6; }   /* 바탕은 그대로 — 막대 전체를 흐리면 아래 목록이 비쳐 보임 */
+.etk-pg-ed-tag[hidden] { display: none; }
+@media (max-width: 900px) {
+    .etk-pg-be-panes { grid-template-columns: 1fr; }
+    .etk-pg-be-tree { max-height: 30vh; }
+    .etk-pg-be-items .etk-pg-ed-list { max-height: 40vh; }
+}
+@media (pointer: coarse) { .etk-pg-be-g { padding: 7px 6px; } .etk-pg-be-ic { min-width: 32px; height: 32px; } }
+
+/* 다른 프리셋에서 가져오기: 맞춘 결과 · 토글마다 어떻게 맞췄는지 */
+.etk-pg-be .etk-pg-imp-from { width: 100%; margin: 2px 0 6px; }
+.etk-pg-be .etk-pg-imp-stats { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: color-mix(in srgb, var(--SmartThemeBodyColor) 6%, transparent); font-size: .86em; word-break: keep-all; overflow-wrap: anywhere; }
+.etk-pg-ed-how { flex: none; padding: 0 6px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor) 60%, transparent); color: var(--SmartThemeQuoteColor); font-size: .7em; line-height: 1.6; white-space: nowrap; }
+.etk-pg-ed-how[hidden] { display: none; }
+/* 자동 그룹: 이번에 바뀌는 것 — 토글 줄 · 그룹 목록의 ‘새로’ / ‘+n’ (바탕은 테마 강조색, 글씨는 본문 글자색 — 강조색 글씨는 테마 13개에서 바탕과 비슷했음) */
+.etk-pg-new-badge { flex: none; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--SmartThemeQuoteColor) 22%, transparent); color: var(--SmartThemeBodyColor); font-size: .7em; font-weight: normal; line-height: 1.6; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.etk-pg-new-badge[hidden] { display: none; }
+/* ‘new’는 소문자뿐이라 글자 칸 가운데에 두면 아래로 내려가 보임 → 소문자 높이(ex)부터 글자 바닥까지만 상자로 잡고 위아래 여백으로 가운데 (지원 안 하는 브라우저는 예전 그대로) */
+@supports (text-box: trim-both ex alphabetic) {
+    .etk-pg-new-badge.etk-pg-new-word { text-box: trim-both ex alphabetic; line-height: 1; padding: .57em .55em .53em; }
+}
+.etk-pg-ed-row.etk-pg-ed-changed { box-shadow: inset 2px 0 0 var(--SmartThemeQuoteColor); }
+
+/* 좁은 화면: 고른 그룹만 아이콘을 보이고, 아이콘은 다음 줄로 → 이름 칸을 넓게 */
+@media (max-width: 900px) {
+    .etk-pg-be-actions { padding: 6px 8px; gap: 4px; }
+    .etk-pg-be-actions .menu_button { padding: 4px 10px; font-size: .9em; }
+}
+/* 아이콘(안에 새 그룹 · 택1 · 풀기)은 고른 그룹에만 — 다른 줄은 개수가 오른쪽 끝에 붙음 */
+/* 그룹 편집기 창은 화면 폭을 넉넉히 (실리태번 넓은 창은 채팅 폭 = 화면 절반) */
+.popup:has(.etk-pg-be) { width: min(1040px, 96vw); max-width: 96vw; min-width: 0; }
+/* 테마가 팝업 폭을 !important 로 막으면(좁은 화면 600px 등) 그룹 이름 칸이 한두 글자로 눌림 → 이 창만 넓게 (2026-11-03) */
+.popup.popup:has(.etk-pg-be) { width: min(1040px, 96vw) !important; max-width: 96vw !important; }
+/* 편집기 ‘고른 그룹’ 보기: ☰ 로 그룹 안 순서 바꾸기 */
+.etk-pg-ed-grip { display: none; flex: none; width: 22px; text-align: center; color: var(--etk-pg-muted); cursor: grab; touch-action: none; }
+.etk-pg-be-reorder .etk-pg-ed-direct .etk-pg-ed-grip { display: inline-block; }
+.etk-pg-ed-row.etk-pg-ed-grab { opacity: .6; outline: 1px dashed var(--etk-pg-line); }
+@media (pointer: coarse) { .etk-pg-ed-grip { width: 30px; } }
+/* 목록 길이에 따라 창 스크롤바가 생겼다 없어져도 내용이 옆으로 움직이지 않게 */
+.popup:has(.etk-pg-be) .popup-content { scrollbar-gutter: stable; }
+.etk-pg-be-tree, .etk-pg-ed-list { scrollbar-gutter: stable; }
+
+/* ── 그룹 편집기 다듬기 (사이드바 + 표 + 고를 때만 뜨는 동작 막대) ── */
+.etk-pg-be-tree { padding: 4px; }
+.etk-pg-be-g { padding: 5px 8px; gap: 8px; min-height: 34px; border-radius: 6px; }
+.etk-pg-be-g.etk-pg-be-sel { box-shadow: none; background: color-mix(in srgb, var(--etk-pg-color, var(--SmartThemeQuoteColor)) 16%, transparent); }
+.etk-pg-be-g .etk-pg-be-n { min-width: 2ch; text-align: right; font-size: .8em; color: var(--etk-pg-muted); font-variant-numeric: tabular-nums; }
+.etk-pg-be-g .etk-pg-be-ic { min-width: 26px; height: 26px; }
+.etk-pg-be-none { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--etk-pg-line); border-radius: 0; }
+/* 동작 막대: 아무것도 안 고르면 숨김, 고르면 목록 아래에 (목록을 가리지 않음) */
+.etk-pg-be-actions { position: static; margin-top: 8px; padding: 6px 6px 6px 14px; gap: 6px; border: 0; border-radius: 10px; background: var(--SmartThemeBodyColor); color: var(--SmartThemeBlurTintColor); box-shadow: 0 6px 18px rgba(0, 0, 0, .14); }
+.etk-pg-be-actions.etk-pg-be-idle { display: none; }
+.etk-pg-be-actions.etk-pg-be-idle > * { opacity: 1; }
+.etk-pg-be-actions .etk-pg-ed-count { font-weight: 600; font-size: .9em; }
+.etk-pg-be-actions .menu_button { margin: 0; padding: 5px 12px; border: 0; border-radius: 7px; font-size: .88em; background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 14%, transparent); color: var(--SmartThemeBlurTintColor); }
+.etk-pg-be-actions .menu_button.etk-pg-be-put { background: var(--SmartThemeBlurTintColor); color: var(--SmartThemeBodyColor); }
+.etk-pg-be-actions .menu_button:hover { filter: brightness(1.08); }
+.etk-pg-be-actions .menu_button:disabled { opacity: .4; }
+.etk-pg-be-actions .etk-pg-be-clear { color: color-mix(in srgb, var(--SmartThemeBlurTintColor) 75%, transparent); padding: 5px 8px; }
+.etk-pg-ed-meta { min-height: 1.4em; }
+/* 이름 칸: 평소엔 글자만, 고른 줄에선 마우스를 올리면 옅게, 입력할 때만 얇은 테두리 (자리 안 움직임) */
+.etk-pg-be-name.text_pole { height: auto; min-height: 0; margin: 0; padding: 3px 6px; border: 1px solid transparent; border-radius: 5px; background: transparent; box-shadow: none; outline: none; line-height: 1.4; font-size: .93em; color: inherit; }
+.etk-pg-be-sel .etk-pg-be-name.text_pole:hover { background: color-mix(in srgb, var(--SmartThemeBodyColor) 6%, transparent); cursor: text; }
+.etk-pg-be-name.text_pole:focus, .etk-pg-be-sel .etk-pg-be-name.text_pole:focus { border-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 65%, transparent); background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 85%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--SmartThemeQuoteColor) 15%, transparent); }
+/* 두 칸 높이를 맞춤: 왼쪽 그룹 목록이 오른쪽 칸 끝까지 */
+.etk-pg-be-groups { align-self: stretch; }
+.etk-pg-be-tree { flex: 1 1 0; min-height: 180px; max-height: none; }
+/* 막대는 늘 자리를 차지(나타날 때 창이 출렁이지 않게) — 안 고르면 안내 글만 */
+.etk-pg-be-actions.etk-pg-be-idle { display: flex; background: transparent; box-shadow: none; color: var(--etk-pg-muted); padding-left: 2px; }
+.etk-pg-be-actions.etk-pg-be-idle .menu_button, .etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-clear { visibility: hidden; }
+.etk-pg-be-actions.etk-pg-be-idle .etk-pg-ed-count { font-weight: 400; }
+@media (max-width: 900px) { .etk-pg-be-tree { flex: none; max-height: 40vh; } }
+/* 고른 줄: 테두리 · 점 고리 없이 옅은 회색 바탕만 (사이드바 기본 모양), 마우스 올린 줄은 더 옅게 */
+.etk-pg-be-g:hover { background: color-mix(in srgb, var(--SmartThemeBodyColor) 4%, transparent); }
+.etk-pg-be-g.etk-pg-be-sel { background: color-mix(in srgb, var(--SmartThemeBodyColor) 8%, transparent); box-shadow: none; }
+.etk-pg-be-sel .etk-pg-be-dot { box-shadow: none; }
+.etk-pg-be-g .etk-pg-be-ic { color: var(--etk-pg-muted); }
+.etk-pg-be-g .etk-pg-be-ic:hover { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeBodyColor) 8%, transparent); }
+/* 창 안에서만 정리: 편집기는 화면 높이에 맞춘 한 덩어리, 스크롤은 두 목록에만, 칸 사이 간격 10px 로 통일 */
+.etk-pg-be { display: flex; flex-direction: column; gap: 10px; height: min(78vh, 760px); min-height: 0; text-align: left; }
+.etk-pg-be > * { margin: 0 !important; }
+.etk-pg-be .etk-pg-ed-title { font-size: 1.1em; }
+.etk-pg-be .etk-pg-ed-summary { font-size: .85em; line-height: 1.5; color: var(--etk-pg-muted); }
+.etk-pg-be-panes { flex: 1 1 auto; min-height: 0; gap: 16px; align-items: stretch; }
+.etk-pg-be-groups, .etk-pg-be-items { min-height: 0; gap: 8px; }
+.etk-pg-be-head { min-height: 34px; }
+.etk-pg-be-items .etk-pg-ed-bar, .etk-pg-be-items .etk-pg-ed-filter, .etk-pg-be-items .etk-pg-ed-meta { margin: 0; }
+.etk-pg-be-items .etk-pg-ed-list { flex: 1 1 0; min-height: 120px; max-height: none; }
+.etk-pg-be-actions { flex: none; margin: 0; min-height: 40px; }
+.popup:has(.etk-pg-be) .popup-content { overflow: visible; }
+@media (max-width: 900px) {
+    .etk-pg-be { height: auto; }
+    .etk-pg-be-items .etk-pg-ed-list { flex: none; max-height: 45vh; }
+    .popup:has(.etk-pg-be) .popup-content { overflow: auto; }
+}
+.etk-pg-be-actions .etk-pg-ed-count { color: inherit; }
+
+/* ── 그룹 줄 다시: 아이콘은 늘 보이되 옅게(올리거나 고르면 진하게), 이름 칸은 눌러 고치는 칸답게 ── */
+.etk-pg-be-g { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto auto auto; transition: background-color .15s ease; }
+.etk-pg-be-g .etk-pg-be-ic { opacity: .45; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
+.etk-pg-be-g:hover .etk-pg-be-ic, .etk-pg-be-g.etk-pg-be-sel .etk-pg-be-ic, .etk-pg-be-g .etk-pg-be-ic.on, .etk-pg-be-g .etk-pg-be-ic:focus-visible { opacity: 1; }
+.etk-pg-be-name.text_pole {
+    padding: 4px 26px 4px 8px; border-radius: 6px; border: 1px solid transparent;
+    transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+    background: transparent no-repeat right 8px center / 12px 12px;
+}
+/* 올리면 고칠 수 있다는 표시(옅은 바탕 + 연필) */
+.etk-pg-be-g:hover .etk-pg-be-name.text_pole, .etk-pg-be-sel .etk-pg-be-name.text_pole {
+    background-color: color-mix(in srgb, var(--SmartThemeBodyColor) 5%, transparent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M11.5 2.5l2 2L6 12H4v-2z'/%3E%3C/svg%3E");
+    /* 테마의 입력칸 background 줄임말이 반복 · 크기를 덮어써서 연필이 칸 가득 깔리던 것 */
+    background-repeat: no-repeat !important; background-position: right 8px center !important; background-size: 12px 12px !important;
+}
+/* 입력 중: 흰 칸 + 테마 강조색 테두리와 고리 */
+.etk-pg-be-name.text_pole:focus, .etk-pg-be-sel .etk-pg-be-name.text_pole:focus {
+    background-color: var(--SmartThemeBlurTintColor); background-image: none; padding-right: 8px;
+    border-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 70%, transparent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--SmartThemeQuoteColor) 18%, transparent), 0 1px 2px rgba(0, 0, 0, .06);
+}
+/* 동작 막대: 갑자기 바뀌지 않게 부드럽게 */
+.etk-pg-be-actions { transition: background-color .2s ease, box-shadow .2s ease, color .2s ease, padding .2s ease; }
+.etk-pg-be-actions .menu_button, .etk-pg-be-actions .etk-pg-be-clear { transition: opacity .2s ease, transform .2s ease; }
+.etk-pg-be-actions.etk-pg-be-idle .menu_button, .etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-clear { visibility: visible; opacity: 0; transform: translateY(3px); pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .etk-pg-be-actions, .etk-pg-be-actions *, .etk-pg-be-g, .etk-pg-be-g * { transition: none !important; } }
+@media (pointer: coarse) { .etk-pg-be-g .etk-pg-be-ic { opacity: .7; min-width: 28px; height: 28px; } }
+/* 테마가 입력칸 그림자 · 테두리를 !important 로 지워서 — 이 이름 칸만 되살림 */
+/* 바탕도: 테마가 입력칸을 흰 바탕 · 큰 둥근 모서리로 칠해 그룹 이름마다 흰 알약이 생겼음 → 평소엔 투명 (2026-11-03) */
+.etk-pg-be .etk-pg-be-name.text_pole:not(#etk_pg_x) { border-color: transparent !important; box-shadow: none !important; background-color: transparent !important; border-radius: 6px !important; padding: 3px 6px !important; height: auto !important; min-height: 0 !important; }
+.etk-pg-be :is(.etk-pg-be-g:hover, .etk-pg-be-sel) .etk-pg-be-name.text_pole:not(#etk_pg_x):not(:focus) { background-color: color-mix(in srgb, var(--SmartThemeBodyColor) 5%, transparent) !important; }
+.etk-pg-be .etk-pg-be-name.text_pole:not(#etk_pg_x):focus {   /* #etk_pg_x: 테마 선택자(:not 여러 개)보다 우선 */
+    background-color: var(--SmartThemeBlurTintColor) !important;
+    border-color: color-mix(in srgb, var(--SmartThemeQuoteColor) 70%, transparent) !important;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--SmartThemeQuoteColor) 18%, transparent), 0 1px 2px rgba(0, 0, 0, .06) !important;
+    outline: none !important;
+}
+/* 폰: 아이콘을 촘촘하게 해서 이름 칸을 넓게 */
+@media (max-width: 900px) {
+    .etk-pg-be-g { gap: 4px; padding: 5px 6px; }
+    .etk-pg-be-g .etk-pg-be-ic { min-width: 26px; height: 30px; padding: 0 3px; font-size: .74em; }
+    .etk-pg-be-name.text_pole { padding-right: 8px; }
+    .etk-pg-be .etk-pg-be-g:hover .etk-pg-be-name.text_pole, .etk-pg-be .etk-pg-be-sel .etk-pg-be-name.text_pole { background-image: none; }
+}
+/* 동작 막대: 안내 글은 따로 겹쳐 두고(자리 안 차지) 바탕 · 글자만 서서히 — 줄바꿈 · 폭 변화 없음 */
+.etk-pg-be-actions { position: relative; flex-wrap: nowrap; min-height: 44px; transition: background-color .18s ease, box-shadow .18s ease; }
+.etk-pg-be-actions > * { white-space: nowrap; }
+.etk-pg-be-actions .etk-pg-be-hint { position: absolute; left: 2px; top: 50%; transform: translateY(-50%); color: var(--etk-pg-muted); font-size: .88em; pointer-events: none; opacity: 0; transition: opacity .18s ease; }
+.etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-hint { opacity: 1; }
+.etk-pg-be-actions .etk-pg-ed-count, .etk-pg-be-actions .menu_button, .etk-pg-be-actions .etk-pg-be-clear { transition: opacity .18s ease; transform: none !important; }
+.etk-pg-be-actions.etk-pg-be-idle .etk-pg-ed-count, .etk-pg-be-actions.etk-pg-be-idle .menu_button, .etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-clear { opacity: 0; pointer-events: none; }
+.etk-pg-be-actions .menu_button.etk-pg-be-put:disabled { background: transparent; color: color-mix(in srgb, var(--SmartThemeBlurTintColor) 70%, transparent); opacity: 1; }
+.etk-pg-be-actions .etk-pg-ed-count { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) { .etk-pg-be-actions { flex-wrap: wrap; } .etk-pg-be-actions .etk-pg-be-hint { white-space: normal; right: 2px; } }
+.etk-pg-be-actions.etk-pg-be-idle { padding: 6px 6px 6px 14px; }
+/* ── 동작 줄: 목록 위 한 줄(안 고르면 사용법, 고르면 개수 · 넣기 · 빼기 · 해제) — 따로 자리 · 색 막대 없음 ── */
+.etk-pg-be .etk-pg-be-actions, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle {
+    position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: 6px;
+    min-height: 30px; margin: 0; padding: 0; border: 0; border-radius: 0;
+    background: transparent; box-shadow: none; color: var(--SmartThemeBodyColor); transition: none;
+}
+.etk-pg-be .etk-pg-be-actions .etk-pg-be-hint { position: absolute; left: 0; top: 50%; transform: translateY(-50%); font-size: .82em; color: var(--etk-pg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.etk-pg-be .etk-pg-be-actions .etk-pg-ed-count { margin-right: auto; font-size: .86em; font-weight: 600; color: var(--SmartThemeBodyColor); }
+.etk-pg-be .etk-pg-be-actions .menu_button { margin: 0; padding: 4px 10px; min-height: 0; border-radius: 6px; font-size: .84em; filter: none;
+    border: 1px solid var(--etk-pg-line); background: transparent; color: var(--SmartThemeBodyColor); }
+.etk-pg-be .etk-pg-be-actions .menu_button.etk-pg-be-put { border-color: transparent; background: color-mix(in srgb, var(--SmartThemeQuoteColor) 16%, transparent); color: var(--SmartThemeBodyColor); }
+.etk-pg-be .etk-pg-be-actions .menu_button.etk-pg-be-put:disabled { background: transparent; border-color: transparent; color: var(--etk-pg-muted); opacity: 1; }
+.etk-pg-be .etk-pg-be-actions .menu_button:hover:not(:disabled) { background: color-mix(in srgb, var(--SmartThemeBodyColor) 8%, transparent); }
+.etk-pg-be .etk-pg-be-actions .menu_button.etk-pg-be-put:hover:not(:disabled) { background: color-mix(in srgb, var(--SmartThemeQuoteColor) 24%, transparent); }
+.etk-pg-be .etk-pg-be-actions .etk-pg-be-clear { padding: 4px 6px; font-size: .84em; color: var(--etk-pg-muted); }
+.etk-pg-be .etk-pg-be-actions .etk-pg-be-hint, .etk-pg-be .etk-pg-be-actions .etk-pg-ed-count, .etk-pg-be .etk-pg-be-actions .menu_button, .etk-pg-be .etk-pg-be-actions .etk-pg-be-clear { transition: opacity .15s ease; }
+.etk-pg-be .etk-pg-be-actions .etk-pg-be-hint { opacity: 0; pointer-events: none; }
+.etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-hint { opacity: 1; }
+.etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .etk-pg-ed-count, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .menu_button, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-clear { opacity: 0; pointer-events: none; }
+@media (max-width: 900px) {
+    .etk-pg-be .etk-pg-be-actions, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle { flex-wrap: wrap; row-gap: 4px; }
+    .etk-pg-be .etk-pg-be-actions .etk-pg-ed-count { flex-basis: 100%; }
+    .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .etk-pg-ed-count, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .menu_button, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .etk-pg-be-clear { display: none; }
+    .etk-pg-be .etk-pg-be-actions .etk-pg-be-hint { position: static; transform: none; white-space: normal; }
+    .etk-pg-be .etk-pg-be-actions:not(.etk-pg-be-idle) .etk-pg-be-hint { display: none; }
+}
+/* 동작 줄: 안 고르면 단추를 확실히 숨김(사용 못 함 단추가 위 규칙으로 다시 보이던 것), 글자 크기 · 줄 높이 하나로 */
+.etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .menu_button.etk-pg-be-put:disabled, .etk-pg-be .etk-pg-be-actions.etk-pg-be-idle .menu_button { opacity: 0; visibility: hidden; }
+.etk-pg-be .etk-pg-be-actions .etk-pg-be-hint, .etk-pg-be .etk-pg-be-actions .etk-pg-ed-count, .etk-pg-be .etk-pg-be-actions .menu_button, .etk-pg-be .etk-pg-be-actions .etk-pg-be-clear { font-size: 13px; line-height: 20px; }
+.etk-pg-be .etk-pg-be-actions .menu_button, .etk-pg-be .etk-pg-be-actions .etk-pg-be-clear { padding-top: 4px; padding-bottom: 4px; display: inline-flex; align-items: center; }
+/* 그룹 머리 ‘택1’: 바로 눌러 켜고 끔 — 꺼진 그룹은 마우스를 올릴 때만 옅게(폰은 늘 옅게) */
+.etk-pg-one { cursor: pointer; user-select: none; transition: opacity .15s ease, background-color .15s ease, color .15s ease; }
+.etk-pg-one.etk-pg-one-off { opacity: 0; border-style: dashed; }
+.etk-pg-group-head:hover .etk-pg-one.etk-pg-one-off, .etk-pg-one.etk-pg-one-off:focus-visible { opacity: .55; }
+.etk-pg-one.etk-pg-one-off:hover { opacity: 1; }
+@media (hover: none) { .etk-pg-one.etk-pg-one-off { opacity: .35; } }
+/* ‘택1’ 알약은 아이콘 단추 크기(26px)를 따르지 않음 — 한 줄 글자 폭대로 */
+.etk-pg-btn.etk-pg-one { width: auto; height: auto; min-width: 0; padding: 0 8px; border-radius: 999px; white-space: nowrap; line-height: 1.6; font-size: .7em; color: var(--etk-pg-muted); border: 1px solid var(--etk-pg-line); }
+.etk-pg-btn.etk-pg-one:hover { background: color-mix(in srgb, var(--SmartThemeBodyColor) 8%, transparent); color: var(--SmartThemeBodyColor); }   /* 켜진 모양은 예전 그대로(옅은 글자 · 얇은 테두리), 올렸을 때만 살짝 */
+@media (pointer: coarse) { .etk-pg-btn.etk-pg-one { padding: 2px 8px; } }
+/* 켜진 개수 칸 폭 고정(2/6 · 11/12 가 달라도 택1 · 스위치 자리가 같게) */
+.etk-pg-group-head .etk-pg-count { flex: none; min-width: 5.2ch; text-align: right; font-variant-numeric: tabular-nums; }
+/* 개수 칸은 가장 흔한 ‘11/22’ 폭만, 택1 과 개수 사이는 4px */
+.etk-pg-group-head .etk-pg-count { min-width: 3.6ch; }   /* ‘2/6’ · ‘1/10’ 폭 — 택1 을 붙일 만한 작은 그룹 기준(큰 그룹만 조금 밀림) */
+.etk-pg-group-head .etk-pg-one { margin-right: -2px; }
+.etk-pg-group-head .etk-pg-count { text-align: right; }   /* 숫자는 스위치 쪽(오른쪽)에 맞춤 */
+/* 그룹 없이 보기: 모두 접기 단추는 자리만 남김(옆 단추가 밀리지 않게) */
+.etk-pg-ib.etk-pg-ib-gone { visibility: hidden; pointer-events: none; }
+/* 프롬프트 목록이 패널 폭을 넘지 않게 — 내용 폭(그룹 머리 · 점 등)에 따라 늘어나 위 단추 줄까지 같이 넓어지던 것 */
+#completion_prompt_manager { min-width: 0; max-width: 100%; }
+/* 위 단추 줄과 목록 · 도구 줄의 양 끝을 같은 선에 */
+#completion_prompt_manager .completion_prompt_manager_footer { padding-left: 0; padding-right: 0; }
+/* 좁을 때 단추 줄이 왼쪽으로 삐져나가지 않게: 드롭다운은 줄어들고, 그래도 모자라면 다음 줄로 */
+#completion_prompt_manager .completion_prompt_manager_footer { flex-wrap: wrap !important; row-gap: 4px !important; }
+#completion_prompt_manager .completion_prompt_manager_footer > select { flex: 1 1 64px; min-width: 0; }   /* 한 줄에 들어가면 한 줄로(드롭다운이 먼저 줄어듦) */
+
+/* 편집 창 그룹 순서: ☰ 끌기 · 위아래 단추 */
+.etk-pg-be-g { grid-template-columns: 16px 10px minmax(0, 1fr) auto auto auto auto auto; }
+.etk-pg-be-none { grid-template-columns: 16px 10px minmax(0, 1fr) auto; }
+.etk-pg-be-grip { display: inline-flex; align-items: center; justify-content: center; color: var(--etk-pg-muted); opacity: .45; cursor: grab; touch-action: none; font-size: .8em; }
+.etk-pg-be-g:hover .etk-pg-be-grip, .etk-pg-be-sel .etk-pg-be-grip { opacity: 1; }
+.etk-pg-be-grip-none { cursor: default; }
+.etk-pg-be-mv { display: inline-flex; }
+.etk-pg-be-g .etk-pg-be-mv .etk-pg-be-ic { min-width: 20px; padding: 0 2px; }
+.etk-pg-be-g.etk-pg-be-dragging { opacity: .5; }
+.etk-pg-be-g.etk-pg-be-drop-before { box-shadow: inset 0 2px 0 var(--SmartThemeQuoteColor); }
+.etk-pg-be-g.etk-pg-be-drop-after { box-shadow: inset 0 -2px 0 var(--SmartThemeQuoteColor); }
+@media (pointer: coarse) { .etk-pg-be-grip { width: 22px; opacity: .7; } .etk-pg-be-g { grid-template-columns: 22px 10px minmax(0, 1fr) auto auto auto auto auto; } .etk-pg-be-none { grid-template-columns: 22px 10px minmax(0, 1fr) auto; } }
+
+/* 그룹으로 보여 줄 때 ‘이름/토큰’ 머리 아래 실리태번 빈 구분 줄이 테마에 따라 40px 넘게 비어 보였음 → 얇은 선만 (모든 테마, 2026-11-03) */
+#completion_prompt_manager_list:has(.etk-pg-group) > .completion_prompt_manager_list_separator { height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+#completion_prompt_manager_list:has(.etk-pg-group) > .completion_prompt_manager_list_separator hr { margin: .3em 0 !important; }
+#completion_prompt_manager_list:has(.etk-pg-group) > .completion_prompt_manager_list_head { margin-bottom: 0 !important; }
+
+/* 다른 확장이 같은 이름(.etk-pg-sub · .etk-pg-group-body · .etk-pg-group)에 여백 · flex · 바탕을 걸어도 프롬프트 목록 안에선 우리 모양 그대로 */
+#completion_prompt_manager #completion_prompt_manager_list li.etk-pg-group { padding: 0; flex-direction: initial; }
+#completion_prompt_manager #completion_prompt_manager_list .etk-pg-group-body { display: block; border-radius: 0; background: none; gap: 0; }
+#completion_prompt_manager #completion_prompt_manager_list .etk-pg-collapsed > .etk-pg-group-body { display: none; }
+
+
+/* 테마가 프롬프트 줄을 상자로 그리면 그룹 머리도 같은 상자(index.js syncRowLook 이 잰 값). 상자가 없는 테마는 원래대로 */
+#completion_prompt_manager_list .etk-pg-group-head {
+    border: var(--etk-pg-row-border, 0 none transparent);
+    border-radius: var(--etk-pg-row-radius, 6px);
+    background-color: var(--etk-pg-row-bg, transparent);
+    box-shadow: var(--etk-pg-row-shadow, none);
+    margin-bottom: var(--etk-pg-row-gap, 0);
+}
+
+/* 그룹 스위치 · ⋮ 를 테마의 토글 줄 아이콘과 같게(index.js syncRowLook 이 잰 값, 못 재면 원래 색) — 마우스를 올리면 진하게는 그대로 */
+#completion_prompt_manager_list .etk-pg-group-head .etk-pg-toggle-all.fa-toggle-on {
+    color: var(--etk-pg-tg-on-color, var(--SmartThemeBodyColor)); opacity: var(--etk-pg-tg-on-op, 1); font-size: var(--etk-pg-tg-on-size, inherit); filter: var(--etk-pg-tg-on-filter, none);
+}
+#completion_prompt_manager_list .etk-pg-group-head .etk-pg-toggle-all.fa-toggle-off {
+    color: var(--etk-pg-tg-off-color, var(--etk-pg-muted)); opacity: var(--etk-pg-tg-off-op, 1); font-size: var(--etk-pg-tg-off-size, inherit); filter: var(--etk-pg-tg-off-filter, none);
+}
+#completion_prompt_manager_list .etk-pg-group-head .etk-pg-more {
+    color: var(--etk-pg-ic-color, var(--etk-pg-muted)); opacity: var(--etk-pg-ic-op, 1); font-size: var(--etk-pg-ic-size, inherit); filter: var(--etk-pg-ic-filter, none);
+}
+#completion_prompt_manager_list .etk-pg-group-head :is(.etk-pg-toggle-all, .etk-pg-more):hover { opacity: 1; }
+
+/* 토글이 다 꺼진 그룹(0/n)은 그 테마가 꺼진 토글 줄을 흐리게 그릴 때만 같은 흐림(index.js syncRowLook 이 잰 값, 안 흐리는 테마는 그대로) */
+#completion_prompt_manager_list .etk-pg-group-head.etk-pg-all-off .etk-pg-name { color: var(--etk-pg-off-name, inherit); opacity: var(--etk-pg-off-op, 1); }
+#completion_prompt_manager_list .etk-pg-group-head.etk-pg-all-off :is(.etk-pg-count, .etk-pg-folder) { color: var(--etk-pg-off-name, var(--etk-pg-muted)); opacity: var(--etk-pg-off-op, 1); }
+/* 그룹 목록의 ‘새로’ · ‘+n’은 개수 칸 안에 (칸 수가 정해진 줄이라 따로 두면 아이콘이 다음 줄로 밀림) */
+.etk-pg-be-g .etk-pg-be-n:has(.etk-pg-new-badge) { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.etk-pg-be-g .etk-pg-be-n .etk-pg-new-badge { font-size: .9em; }
+.etk-pg-ed-chip[hidden] { display: none; }
+/* 좁은 화면: 그룹 목록에선 이름 칸이 좁아 ‘새로’ · ‘+n’을 작은 점으로 (글은 마우스 · 길게 누르면 title) */
+@media (max-width: 600px) {
+    .etk-pg-be-g .etk-pg-be-n .etk-pg-new-badge { font-size: 0; width: 7px; height: 7px; padding: 0; background: var(--SmartThemeQuoteColor); }
+}
+/* 편집기를 열 때 토글 줄(수백 개)을 한꺼번에 그리느라 느렸음 → 화면 밖 줄은 보일 때 그림 */
+.etk-pg-be .etk-pg-ed-row { content-visibility: auto; contain-intrinsic-size: auto 34px; }
+/* ‘AI로 다시 묶기’: 테마의 기본 단추 모양(네모 상자) 대신 아래 칩과 같은 결의 알약 — 바탕 · 테두리는 테마 강조색을 옅게, 글씨는 본문 글자색 */
+.etk-pg-auto-ai .menu_button.etk-pg-auto-ai-run { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 7px; padding: 5px 14px 5px 11px; border-radius: 999px; cursor: pointer; font-size: .9em; line-height: 1.4; color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeQuoteColor) 14%, transparent); border: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor) 45%, transparent); transition: background-color .15s ease, border-color .15s ease; }
+.etk-pg-auto-ai .menu_button.etk-pg-auto-ai-run i { color: var(--SmartThemeQuoteColor); font-size: .95em; }
+.etk-pg-auto-ai .menu_button.etk-pg-auto-ai-run:hover { background: color-mix(in srgb, var(--SmartThemeQuoteColor) 24%, transparent); border-color: var(--SmartThemeQuoteColor); }
+.etk-pg-auto-ai .menu_button.etk-pg-auto-ai-run:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 2px; }
+.etk-pg-auto-ai .menu_button.etk-pg-auto-ai-run.etk-pg-busy { opacity: .85; }
+/* ‘이 그룹 편집’ = 큰 편집기를 그 그룹만 보이게 줄인 것 — 높이만 조금 작게 */
+@media (min-width: 901px) { .etk-pg-be.etk-pg-be-scope { height: min(70vh, 640px); } }   /* 좁은 화면은 큰 편집기처럼 높이 자동(위아래로 쌓여서) */
+/* 창 안쪽 칸이 넘친 부분을 잘라서, 기울인 제목 글꼴의 키 큰 한글 윗부분이 잘리던 것 */
+.etk-pg-editor .etk-pg-ed-title { padding-top: .2em; line-height: 1.35; }
+
+/* 도구 줄 자리: 제목 줄 안 · 목록 아래 */
+#completion_prompt_manager .completion_prompt_manager_header .etk-pg-toolbar.etk-pg-bar-head { flex: 0 1 auto; width: auto; margin: -4px 12px -4px auto; }
+#completion_prompt_manager .completion_prompt_manager_header .etk-pg-toolbar.etk-pg-bar-head { gap: 6px; font-size: var(--mainFontSize, 15px); }
+#completion_prompt_manager .completion_prompt_manager_header .etk-pg-toolbar.etk-pg-bar-head > .etk-pg-ib { box-sizing: border-box; width: 30px; height: 30px; min-width: 30px; padding: 0; margin: 0; line-height: 1; }   /* 테마가 제목 줄 안 div 에 여백을 줘도 마우스 올린 칸이 정사각형으로 */
+#completion_prompt_manager .completion_prompt_manager_header:has(.etk-pg-bar-head) { align-items: center; }
+.etk-pg-toolbar.etk-pg-bar-bottom { margin: 8px 0 2px; }
+.etk-pg-be-trans { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0 0 8px; }
+.etk-pg-be-trans[hidden] { display: none; }
+.etk-pg-be-trans .etk-pg-be-trans-run { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; cursor: pointer; font-size: .85em;
+    color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeQuoteColor) 14%, transparent); border: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor) 35%, transparent); }
+.etk-pg-be-trans .etk-pg-be-trans-run:hover { background: color-mix(in srgb, var(--SmartThemeQuoteColor) 22%, transparent); }
+.etk-pg-be-trans .etk-pg-be-trans-run:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 1px; }
+.etk-pg-be-trans .etk-pg-be-trans-run.etk-pg-busy { opacity: .6; pointer-events: none; }
+.etk-pg-be-trans .etk-pg-be-trans-how { display: inline-flex; gap: 4px; }
+.etk-pg-be-trans .etk-pg-be-trans-note { color: var(--etk-pg-muted, inherit); opacity: .8; flex: 1 1 auto; }
+.etk-pg-be-trans .etk-pg-be-trans-conn { flex: 1 1 100%; }
+.etk-pg-be-trans .etk-pg-be-trans-conn[hidden] { display: none; }
+.etk-pg-be-trans .etk-pg-be-trans-eng { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.etk-pg-be-trans .etk-pg-be-trans-eng[hidden] { display: none; }
+.etk-pg-set-prompts { margin: 4px 0 8px; }
+.etk-pg-set-prompts .etk-pg-set-prompt { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.etk-pg-set-prompts .etk-pg-set-prompt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.etk-pg-set-prompts textarea { width: 100%; box-sizing: border-box; resize: vertical; font-size: .85em; line-height: 1.45; }
+.etk-pg-ps { display: flex; flex-direction: column; gap: 8px; }
+.etk-pg-ps .etk-pg-ps-pills { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.etk-pg-ps .etk-pg-ps-add { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 999px; font-size: .85em; cursor: pointer; color: var(--SmartThemeBodyColor); border: 1px dashed color-mix(in srgb, var(--SmartThemeBodyColor) 30%, transparent); }
+.etk-pg-ps .etk-pg-ps-add:hover { border-style: solid; background: color-mix(in srgb, var(--SmartThemeQuoteColor) 12%, transparent); }
+.etk-pg-ps .etk-pg-ps-add:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 1px; }
+.etk-pg-ps .etk-pg-ps-namerow { display: flex; gap: 6px; align-items: center; }
+.etk-pg-ps .etk-pg-ps-namerow[hidden] { display: none; }
+.etk-pg-ps .etk-pg-ps-name { flex: 1 1 auto; margin: 0; }
+.etk-pg-ps .etk-pg-ps-default-note { display: none; }
+.etk-pg-ps.etk-pg-ps-default .etk-pg-ps-default-note { display: block; }
+.etk-pg-ps.etk-pg-ps-default .etk-pg-set-reset { display: none; }
+.etk-pg-ps.etk-pg-ps-default textarea { opacity: .7; }
+.etk-pg-ps .etk-pg-ed-chip { font-size: .85em; }
+.etk-pg-settings { --etk-pg-muted: color-mix(in srgb, var(--SmartThemeBodyColor) 58%, transparent); --etk-pg-line: color-mix(in srgb, var(--SmartThemeBodyColor) 16%, transparent); }
+/* 지시문 칸 단추: 실리태번 기본 단추 대신 알약 · 둥근 아이콘 */
+.etk-pg-set-prompts .etk-pg-set-reset { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: .8em; cursor: pointer; color: var(--etk-pg-muted); border: 1px solid var(--etk-pg-line); }
+.etk-pg-set-prompts .etk-pg-set-reset i { font-size: .9em; }
+.etk-pg-set-prompts .etk-pg-set-reset:hover { color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeBodyColor) 8%, transparent); }
+.etk-pg-ps .etk-pg-ps-del { all: unset; box-sizing: border-box; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; color: var(--etk-pg-muted); border: 1px solid var(--etk-pg-line); }
+.etk-pg-ps .etk-pg-ps-del:hover { color: #d9534f; border-color: color-mix(in srgb, #d9534f 50%, transparent); background: color-mix(in srgb, #d9534f 10%, transparent); }
+.etk-pg-set-prompts .etk-pg-set-reset:focus-visible, .etk-pg-ps .etk-pg-ps-del:focus-visible { outline: 2px solid var(--SmartThemeQuoteColor); outline-offset: 1px; }
+.etk-pg-ps .etk-pg-ps-name { border-radius: 8px; }
+.etk-pg-set-prompts textarea { border-radius: 10px; }
+.etk-pg-be-trans .etk-pg-be-trans-eng .etk-pg-ed-chip.etk-pg-mt-off { opacity: .45; border-style: dashed; }
+/* 도구 줄 바로 다음에 다른 확장 줄이 있을 때: 그 줄을 도구 줄 왼쪽 빈자리로 끌어올려 나란히 */
+#completion_prompt_manager .etk-pg-toolbar.etk-pg-bar-side + * { margin-top: calc(-1 * var(--etk-pg-side-h, 0px)) !important; max-width: calc(100% - var(--etk-pg-side-w, 0px) - 12px) !important; position: relative; z-index: 1; }
+
+/* 업데이트 내역: ⋯ 버튼 · 메뉴 항목의 N 표시, 내역 창(이번 판 펼침 · 지난 판 접음, 고정 높이 스크롤) */
+.etk-pg-toolbar .etk-pg-tools { position: relative; }
+.etk-pg-toolbar .etk-pg-tools.etk-pg-new::after, .etk-pg-menu .etk-pg-menu-item.etk-pg-new::after { content: "N"; position: absolute; top: 0; right: -2px; min-width: 1.4em; height: 1.4em; padding: 0 .2em; box-sizing: border-box; border-radius: 999px; background: #e5484d; color: #fff; font-size: max(.6em, 8px); font-family: system-ui, sans-serif; font-weight: 700; line-height: 1.4em; text-align: center; pointer-events: none; }
+.etk-pg-menu .etk-pg-menu-item.etk-pg-new { position: relative; }
+.etk-pg-menu .etk-pg-menu-item.etk-pg-new::after { position: static; margin-left: auto; }
+.etk-pg-log h3 { margin-bottom: 8px; }
+.etk-pg-log .etk-pg-log-now { padding: 8px 12px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--SmartThemeQuoteColor) 45%, transparent); background: color-mix(in srgb, var(--SmartThemeQuoteColor) 7%, transparent); text-align: left; }
+.etk-pg-log .etk-pg-log-head { display: flex; align-items: baseline; gap: 8px; font-weight: 600; margin: 2px 0; }
+.etk-pg-log .etk-pg-log-head small { font-weight: 400; opacity: .65; }
+.etk-pg-log ul { margin: 2px 0 6px; padding-left: 20px; font-size: .92em; text-align: left; }
+.etk-pg-log li { margin: 2px 0; }
+.etk-pg-log .etk-pg-log-old { margin-top: 8px; text-align: left; }
+.etk-pg-log .etk-pg-log-old > summary { cursor: pointer; font-weight: 600; }
+.etk-pg-log .etk-pg-log-count { opacity: .6; font-weight: 400; }
+.etk-pg-log .etk-pg-log-scroll { height: 14em; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; margin-top: 4px; }
+.etk-pg-log .etk-pg-log-scroll .etk-pg-log-head:not(:first-child) { margin-top: 8px; }
+
+/* 그룹 세트: 머리 줄 칩 · 세트 고치기 창(목록은 고정 높이 스크롤) */
+.etk-pg-group-head .etk-pg-btn.etk-pg-setchip { width: auto; height: auto; min-width: 0; max-width: 9em; gap: 3px; padding: 1px 8px; border-radius: 999px; font-size: .78em; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--etk-pg-line); color: var(--SmartThemeBodyColor); background: color-mix(in srgb, var(--SmartThemeQuoteColor) 10%, transparent); cursor: pointer; flex-shrink: 1; }
+.etk-pg-group-head .etk-pg-btn.etk-pg-setchip i { font-size: .85em; opacity: .7; }
+.etk-pg-menu .etk-pg-menu-dim { opacity: .55; margin-left: 4px; }
+.etk-pg-set-edit { text-align: left; display: flex; flex-direction: column; gap: 8px; }
+.etk-pg-set-edit h3 { margin: 0; }
+.etk-pg-set-edit h3, .etk-pg-log h3 { padding-top: .2em; line-height: 1.35; }   /* 기울인 제목 글꼴의 키 큰 한글 윗부분이 창 칸에 잘리던 것 */
+.etk-pg-set-edit .etk-pg-set-list { height: min(46vh, 22em); overflow-y: auto; overscroll-behavior: contain; border: 1px solid var(--etk-pg-line); border-radius: 8px; padding: 4px 8px; }
+.etk-pg-set-edit .etk-pg-set-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; cursor: pointer; }
+.etk-pg-set-edit .etk-pg-set-row input { margin: 0; flex-shrink: 0; }
+.etk-pg-log .etk-pg-log-once { display: block; margin-top: 10px; opacity: .65; font-size: .85em; text-align: center; }
+.etk-pg-log .etk-pg-log-title { font-weight: 700; margin: 4px 0 2px; text-align: left; }
+/* 세트가 있는 그룹은 꺼진 택1 표시를 머리 줄에서 뺌(⋮ 메뉴에서 켬) — 좁은 화면에서 세트 이름 버튼 때문에 그룹 이름이 잘렸음 */
+.etk-pg-group-head:has(.etk-pg-setchip) .etk-pg-one.etk-pg-one-off { display: none; }
+
+/* 확장 설정 패널: 이름 칸 + 고르기 칸을 줄마다 같은 너비로, 좁으면(휴대폰) 이름 위 · 고르기 아래 */
+.etk-pg-settings { container-type: inline-size; }
+.etk-pg-settings .etk-pg-set-row:not(.etk-pg-set-ai) { display: grid; grid-template-columns: 7.5em minmax(0, 1fr); align-items: center; gap: 4px 10px; margin: 6px 0 8px; }
+.etk-pg-settings .etk-pg-set-row:not(.etk-pg-set-ai) select { width: 100%; max-width: 100%; }
+.etk-pg-settings .etk-pg-set-ai { flex-wrap: nowrap; margin: 10px 0 8px; }   /* 세로로 쌓는 상자에 줄바꿈까지 걸려 있으면 AI 연결 칸 아래에 빈자리가 크게 생김 */
+.etk-pg-settings .etk-pg-set-ai .etk-pg-help { margin: 2px 0 0; }
+@container (max-width: 420px) {
+    .etk-pg-settings .etk-pg-set-row:not(.etk-pg-set-ai) { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+}
+.etk-pg-help-intro { position: relative; padding-right: 26px; }
+.etk-pg-help-intro[hidden] { display: none; }
+.etk-pg-help-close { all: unset; position: absolute; top: -2px; right: 0; padding: 3px 6px; border-radius: 6px; cursor: pointer; opacity: .55; line-height: 1; }
+.etk-pg-help-close:hover, .etk-pg-help-close:focus-visible { opacity: 1; background: color-mix(in srgb, var(--SmartThemeBodyColor) 10%, transparent); }
+@media (pointer: coarse) { .etk-pg-help-close { padding: 8px 10px; top: -8px; right: -6px; } .etk-pg-help-intro { padding-right: 30px; } }

@@ -153,15 +153,18 @@ function row(u, sec) {
     const o = opts(), picked = ui.picked.has(u.key);
     return `<div class="etk-wip-book${u.key === o.last ? ' etk-on' : ''}${picked ? ' etk-picked' : ''}" data-key="${esc(u.key)}" data-sec="${esc(sec)}" tabindex="0">${ui.picking ? `<span class="etk-xp-pickbox"><input type="checkbox" tabindex="-1"${picked ? ' checked' : ''}></span>` : ''}<span class="etk-wip-bcol"><span class="etk-wip-bname">${esc(u.title)}${u.ver ? `<small class="etk-xp-ver">${esc(u.ver)}</small>` : ''}</span>${u.outside ? '<small class="etk-xp-outside">다른 확장에서 숨김</small>' : ''}</span>${!ui.picking && shows('update') && updates.outdated(u) ? `<i class="etk-xp-up fa-solid ${updates.isUpdating(u) ? 'fa-spinner fa-spin' : 'fa-circle-arrow-up'} interactable" tabindex="0" title="새 버전 받기 (${esc(updates.extOf(u))})"></i>` : ''}${ui.picking || !shows('fav') ? '' : `<i class="etk-xp-star fa-star ${o.favs.includes(u.key) ? 'fa-solid etk-on' : 'fa-regular'} interactable" tabindex="0" title="${o.favs.includes(u.key) ? '즐겨찾기에서 빼기' : '즐겨찾기(맨 위에 늘 보임)'}"></i>`}</div>`;
 }
+// 묶음마다 지금 보이는(찾기에 걸린) 확장들: 접힌 묶음은 줄을 그리지 않아, 묶음 체크는 화면의 줄이 아니라 이 목록으로 고름
+const secKeys = new Map();
 function section(id, name, list, { real = false } = {}) {
     const o = opts(), q = nfc(ui.query);
     const shown = list.filter(u => !q || koMatch(searchText(u), ui.query));   // 초성(ㅂㄹㅈ) · 띄어쓰기 없이도 찾음(설정 창 찾기와 같은 방식)
     if (q && !shown.length) return '';
+    secKeys.set(id, shown.map(u => u.key));
     // '태그 없음' · '숨김'은 비어도 둠(끌어다 놓아 태그 떼기 · 숨기기)
     const open = !!q || !(o.collapsed[id] ?? id === HIDDEN);
-    return `<div class="etk-wip-folder" data-sec="${esc(id)}"><div class="etk-wip-fhead" tabindex="0"><i class="fa-solid fa-chevron-${open ? 'down' : 'right'}"></i>${ui.picking && shown.length ? `<input type="checkbox" class="etk-wip-fall" tabindex="-1" title="이 묶음 전부"${shown.every(u => ui.picked.has(u.key)) ? ' checked' : ''}>` : ''}${id === FAV ? '<i class="fa-solid fa-star etk-xp-favstar"></i>' : ''}${real && ui.edit?.id === id ? `<input class="text_pole etk-wip-fname etk-xp-tagname" value="${esc(name)}" maxlength="30">` : `<span>${real && shows('shape') && iconOf(id) ? `<i class="fa-solid fa-${iconOf(id)} etk-xp-ticon"${colorCss(id) ? ` style="color:${colorCss(id)};opacity:1"` : ''}></i>` : ''}${esc(name)}${shows('update') && list.some(updates.outdated) ? '<sup class="etk-xp-updot" title="새 버전이 있는 확장이 들어 있어요">UP</sup>' : ''}</span>`}${real && ui.confirm === id
+    return `<div class="etk-wip-folder" data-sec="${esc(id)}"><div class="etk-wip-fhead" tabindex="0"><i class="fa-solid fa-chevron-${open ? 'down' : 'right'}"></i>${ui.picking && shown.length ? `<input type="checkbox" class="etk-wip-fall" tabindex="-1" title="이 묶음 전부"${shown.every(u => ui.picked.has(u.key)) ? ' checked' : ''}>` : ''}${id === FAV ? '<i class="fa-solid fa-star etk-xp-favstar"></i>' : ''}${real && ui.edit?.id === id ? `<input class="text_pole etk-wip-fname etk-xp-tagname" value="${esc(name)}" maxlength="30">` : `<span>${real && iconOf(id) ? `<i class="fa-solid fa-${iconOf(id)} etk-xp-ticon"${colorCss(id) ? ` style="color:${colorCss(id)};opacity:1"` : ''}></i>` : ''}${esc(name)}${shows('update') && list.some(updates.outdated) ? '<sup class="etk-xp-updot" title="새 버전이 있는 확장이 들어 있어요">UP</sup>' : ''}</span>`}${real && ui.confirm === id
         ? '<small class="etk-xp-ask" title="확장은 그대로 남아요">지울까요?</small><span class="etk-xp-tag etk-xp-delok interactable" tabindex="0">지우기</span><span class="etk-xp-tag etk-xp-delno interactable" tabindex="0">취소</span>'
-        : `${shows('count') ? `<small>${list.length}</small>` : ''}${real && !ui.picking && ui.edit?.id !== id ? (shows('shape') ? '<i class="fa-solid fa-shapes etk-xp-ficon" title="앞에 붙일 모양과 색"></i>' : '') + '<i class="fa-solid fa-pencil etk-wip-frename" title="태그 이름 바꾸기"></i><i class="fa-solid fa-trash-can etk-wip-fdel" title="태그 지우기(확장은 그대로)"></i>' : ''}`}</div>${real && ui.iconFor === id && shows('shape') ? `<div class="etk-xp-palette"><div class="etk-xp-colors">${COLORS.map(c => `<span class="etk-xp-color interactable${(isColor(o.colors[id]) ? o.colors[id] : '') === c ? ' etk-on' : ''}" tabindex="0" data-color="${c}" title="${c ? COLOR_NAMES[c] : '글자색 그대로'}"${c ? ` style="--c:${c}"` : ''}></span>`).join('')}${THEME_COLORS.map(([k, v, n]) => `<span class="etk-xp-color etk-xp-themecolor interactable${o.colors[id] === k ? ' etk-on' : ''}" tabindex="0" data-color="${k}" title="${n}" style="--c:var(${v})"></span>`).join('')}${(() => { const own = /^#[0-9a-f]{6}$/i.test(o.colors[id] || '') && !COLORS.includes(o.colors[id]) ? o.colors[id] : ''; return `<label class="etk-xp-color etk-xp-custom${own ? ' etk-on' : ''}" title="색 직접 고르기"${own ? ` style="--c:${own}"` : ''}><input type="color" value="${own || '#888888'}"></label>`; })()}</div><div class="etk-xp-shapes">${['', ...ICONS].map(c => `<span class="etk-xp-pick interactable${(isIcon(o.icons[id]) ? o.icons[id] : '') === c ? ' etk-on' : ''}" tabindex="0" data-icon="${c}">${c ? `<i class="fa-solid fa-${c}"></i>` : '없음'}</span>`).join('')}</div></div>` : ''}${open ? shown.map(u => row(u, id)).join('') : ''}</div>`;
+        : `${shows('count') ? `<small>${list.length}</small>` : ''}${real && ui.edit?.id !== id ? (!ui.picking && shows('shape') ? '<i class="fa-solid fa-shapes etk-xp-ficon" title="앞에 붙일 모양과 색"></i>' : '') + (ui.picking !== shows('tagedit') ? '<i class="fa-solid fa-pencil etk-wip-frename" title="태그 이름 바꾸기"></i><i class="fa-solid fa-trash-can etk-wip-fdel" title="태그 지우기(확장은 그대로)"></i>' : '') : ''}`}</div>${real && ui.iconFor === id && shows('shape') ? `<div class="etk-xp-palette"><div class="etk-xp-colors">${COLORS.map(c => `<span class="etk-xp-color interactable${(isColor(o.colors[id]) ? o.colors[id] : '') === c ? ' etk-on' : ''}" tabindex="0" data-color="${c}" title="${c ? COLOR_NAMES[c] : '글자색 그대로'}"${c ? ` style="--c:${c}"` : ''}></span>`).join('')}${THEME_COLORS.map(([k, v, n]) => `<span class="etk-xp-color etk-xp-themecolor interactable${o.colors[id] === k ? ' etk-on' : ''}" tabindex="0" data-color="${k}" title="${n}" style="--c:var(${v})"></span>`).join('')}${(() => { const own = /^#[0-9a-f]{6}$/i.test(o.colors[id] || '') && !COLORS.includes(o.colors[id]) ? o.colors[id] : ''; return `<label class="etk-xp-color etk-xp-custom${own ? ' etk-on' : ''}" title="색 직접 고르기"${own ? ` style="--c:${own}"` : ''}><input type="color" value="${own || '#888888'}"></label>`; })()}</div><div class="etk-xp-shapes">${['', ...ICONS].map(c => `<span class="etk-xp-pick interactable${(isIcon(o.icons[id]) ? o.icons[id] : '') === c ? ' etk-on' : ''}" tabindex="0" data-icon="${c}">${c ? `<i class="fa-solid fa-${c}"></i>` : '없음'}</span>`).join('')}</div></div>` : ''}${open ? shown.map(u => row(u, id)).join('') : ''}</div>`;
 }
 
 // 태그 묶음 순서: 가나다순, 묶음을 끌어 옮긴 적이 있으면(manualTags) 옮겨 둔 순서(o.tags 순서, 새 태그는 맨 뒤)
@@ -242,7 +245,9 @@ function render() {
     const favs = o.favs.map(k => live.find(u => u.key === k)).filter(Boolean);
     let tree = favs.length && shows('fav') ? section(FAV, '즐겨찾기', favs) : '';
     tree += tagOrder().map(t => section(t, t, live.filter(u => tagsOf(u.key).includes(t)), { real: true })).join('');
-    tree += section(NONE, o.tags.length ? '태그 없음' : '전체', live.filter(u => !tagsOf(u.key).length));
+    // 즐겨찾기에 올린 확장은 '태그 없음'에서는 뺌(맨 위 즐겨찾기 묶음에 이미 있음). 태그를 안 쓰는 '전체' 목록에서는 그대로 둠
+    const inFav = new Set(favs.length && shows('fav') && o.tags.length ? favs.map(u => u.key) : []);
+    tree += section(NONE, o.tags.length ? '태그 없음' : '전체', live.filter(u => !tagsOf(u.key).length && !inFav.has(u.key)));
     tree += section(HIDDEN, '숨김', list.filter(u => hidden.has(u.key)));
     // 새 태그 이름 칸은 목록 맨 위에
     if (ui.edit && !ui.edit.id) tree = '<div class="etk-xp-newrow"><i class="fa-solid fa-tag"></i><input class="text_pole etk-wip-fname etk-xp-tagname" placeholder="새 태그 이름" maxlength="30"></div>' + tree;
@@ -344,7 +349,7 @@ async function onClick(e) {
     if (head) {
         const id = head.parentElement.dataset.sec;
         if (e.target.closest('.etk-wip-fall')) {
-            const keys = [...head.parentElement.querySelectorAll('.etk-wip-book')].map(r => r.dataset.key), all = keys.every(k => ui.picked.has(k));
+            const keys = secKeys.get(id) || [], all = keys.every(k => ui.picked.has(k));   // 접힌 묶음도 고르게(전엔 화면의 줄만 세어, 접힌 묶음은 체크가 안 됐음)
             for (const k of keys) all ? ui.picked.delete(k) : ui.picked.add(k);
             return render();
         }
@@ -451,7 +456,11 @@ function startSwipePick(e, r0) {
     const box = e.target.closest('.etk-xp-pickbox');
     box.setPointerCapture?.(e.pointerId);
     const move = (ev) => {
-        mark(document.elementFromPoint(tb.left + 30, ev.clientY)?.closest('.etk-wip-book'));
+        const under = document.elementFromPoint(tb.left + 30, ev.clientY);
+        mark(under?.closest('.etk-wip-book'));
+        // 접힌 묶음 위를 지나가면 그 묶음을 통째로
+        const fh = under?.closest('.etk-wip-fhead'), fall = fh?.querySelector('.etk-wip-fall');
+        if (fall && !seen.has(fh) && !fh.parentElement.querySelector('.etk-wip-book')) { seen.add(fh); for (const k of secKeys.get(fh.parentElement.dataset.sec) || []) on ? ui.picked.add(k) : ui.picked.delete(k); fall.checked = on; }
         if (ev.clientY < tb.top + 28) tree.scrollTop -= 12; else if (ev.clientY > tb.bottom - 28) tree.scrollTop += 12;   // 가장자리에 대면 목록을 굴림
     };
     const up = () => {
@@ -658,7 +667,7 @@ export function stop() {
 }
 
 // breeze 설정 창: 확장 창에 무엇을 보일지 고르기(끄면 버튼만 숨기고 고른 모양 · 즐겨찾기는 지우지 않음)
-const PARTS = [['shape', '태그 모양과 색 고르기'], ['fav', '즐겨찾기 별'], ['hint', '목록 아래 끌기 안내 글'], ['count', '묶음 옆 확장 개수'], ['update', '새 버전 표시와 업데이트 버튼'], ['search', "'확장 관리' 창 검색칸"]];
+const PARTS = [['shape', '태그 모양과 색 고르기 버튼 (끄면 버튼만 숨기고 고른 모양은 그대로 보여요)'], ['tagedit', "태그 이름 바꾸기 · 지우기 버튼 늘 보이기 (끄면 '선택'을 눌렀을 때만 나와요)"], ['fav', '즐겨찾기 별'], ['hint', '목록 아래 끌기 안내 글'], ['count', '묶음 옆 확장 개수'], ['update', '새 버전 표시와 업데이트 버튼'], ['search', "'확장 관리' 창 검색칸"]];
 export function options(box, a) {
     const o = a.options(); o.off ??= [];
     box.innerHTML = `<div class="etk-xp-optlist"><small>확장 창에 보일 것</small>${PARTS.map(([k, t]) => `<label class="checkbox_label"><input type="checkbox" data-k="${k}"${o.off.includes(k) ? '' : ' checked'}><span>${t}</span></label>`).join('')}</div>`;

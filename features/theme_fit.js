@@ -251,10 +251,10 @@ function areaCss(S, t) {
         if (pad == null) continue;
         out.push(`${S} ${sel} { padding-top: ${pad}px !important; padding-bottom: ${pad}px !important; min-height: 0 !important; height: auto !important; margin-top: 0 !important; margin-bottom: ${a.d < 0 ? 1 : 4}px !important; }`);
     }
-    if (a.rowH > 0) out.push(`${S} #completion_prompt_manager_list { --pf-row-h: ${a.rowH}px !important; }`);
+    if (a.rowH > 0) out.push(`${S} #completion_prompt_manager_list { --pf-row-h: ${a.rowH}px !important; --etk-pg-row-h: ${a.rowH}px !important; }`);
     // 프롬프트 줄 높이를 따라가는 그룹 줄도 제 여백 때문에 더 줄지 못했음 → 같은 여백으로
     const pp = listPad(a, 'prompt');
-    if (pp != null) out.push(`${S} #completion_prompt_manager_list .pf-group-head { padding-top: ${Math.max(0, pp - 2)}px !important; padding-bottom: ${Math.max(0, pp - 2)}px !important; }`);
+    if (pp != null) out.push(`${S} #completion_prompt_manager_list :is(.pf-group-head, .etk-pg-group-head) { padding-top: ${Math.max(0, pp - 2)}px !important; padding-bottom: ${Math.max(0, pp - 2)}px !important; }`);
     return out;
 }
 // 목록마다 테마 원래 줄 여백: 우리 규칙을 잠깐 끄고 잼(이미 걸린 값을 재면 원래 여백을 알 수 없어서). 보이는 목록만, 한 번만

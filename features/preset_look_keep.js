@@ -567,10 +567,19 @@ function looseRenders(text, baseList, baseNameValue, depth, taken) {
         if (!s || globalIds.has(s.id) || s.disabled || !s.findRegex || !Array.isArray(s.placement) || !s.placement.includes(AI_OUTPUT) || !mayMatch(s, text, lower)) continue;
         covered.push(...rangesOf(s, text));
     }
+    // 다만 전역 정규식이 그 자리를 통째로 지우는 것(바꿀 글이 빈 정규식이 블록의 절반 넘게 맞음: 생각 블록 지우기 등)이면 지우려는 뜻이 분명하므로
+    // 다른 프리셋 꾸밈을 빌려 오지 않음 — 빌려 온 꾸밈이 먼저 돌아, 지워야 할 생각 블록이 다른 프리셋 모양의 상자로 그려졌음
+    const erased = [];
+    for (const s of baseList ?? []) {
+        if (!s || !globalIds.has(s.id) || s.disabled || s.promptOnly || !s.findRegex || String(s.replaceString ?? '').trim() || !Array.isArray(s.placement) || !s.placement.includes(AI_OUTPUT) || !mayMatch(s, text, lower)) continue;
+        erased.push(...rangesOf(s, text));
+    }
+    const wiped = (r) => erased.some(e => Math.min(e.end, r.end) - Math.max(e.start, r.start) > (r.end - r.start) / 2);
     const size = text.replace(/\s+/g, '').length;
     const out = [];
     for (const s of candidates) {
         for (const r of rangesOf(s, text)) {
+            if (wiped(r)) continue;
             const chunk = text.slice(r.start, r.end);
             const solid = chunk.replace(/\s+/g, '').length;
             // 짧은 조각(끝 태그만 남은 것 등)은 빈 카드가 됨

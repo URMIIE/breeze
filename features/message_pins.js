@@ -9,10 +9,13 @@ const PAIRS = { mes_hide: ['mes_unhide'], mes_media_gallery: ['mes_media_list'] 
 const MENU_ONLY = ['mes_translate', 'sd_message_gen', 'mes_narrate', 'mes_prompt', 'mes_hide', 'mes_unhide', 'mes_media_gallery', 'mes_media_list', 'mes_embed', 'mes_swipe_picker', 'mes_create_bookmark', 'mes_create_branch', 'mes_copy'];
 const TAKEN = MENU_ONLY.map(k => `:scope > .${k}:not(.etk-pinned)`).join(', ');
 let takenByOther = false;
+// ⋯ 메뉴 버튼 자신의 자리: 고정 목록 안에 이 이름이 있으면 그 앞의 버튼은 ⋯ 앞에, 뒤의 버튼은 ⋯ 뒤에 붙임(없으면 예전처럼 모두 ⋯ 앞)
+const HINT = 'extraMesButtonsHint';
 const slots = new WeakMap();
 let api = null, observer = null, timer = 0, listeners = [], hideStyle = null;
 
 const hidden = () => (api.options().hidden ??= []).filter(k => /^[\w-]+$/.test(k));
+const ownHidden = hidden;
 function applyHidden() {
     hideStyle ??= Object.assign(document.createElement('style'), { id: 'etk-mes-hide' });
     if (!hideStyle.isConnected) document.head.append(hideStyle);
@@ -21,6 +24,7 @@ function applyHidden() {
     hideStyle.textContent = (keys.length ? `#chat .mes :is(.mes_buttons, .extraMesButtons) :is(${keys.map(k => '.' + k).join(', ')}) { display: none !important; }` : '')
         // ⋯ 메뉴는 flex 라 order 로 순서만 바꿈(버튼을 옮기지 않아 다른 확장이 건 처리는 그대로), 짝 버튼은 앞 버튼과 같은 자리
         + (order.length ? `#chat .mes .extraMesButtons > * { order: ${order.length + 1}; }` + order.map((k, i) => `#chat .mes .extraMesButtons > :is(${[k, ...(PAIRS[k] || [])].map(x => '.' + x).join(', ')}) { order: ${i + 1}; }`).join('') : '');
+    document.dispatchEvent(new Event('breeze-message-buttons-hidden'));   // 숨긴 버튼이 바뀐 것을 알린다(버튼을 따로 그리는 쪽이 다시 맞추게)
 }
 
 const pins = () => (api.options().pins ??= []).filter(k => /^[\w-]+$/.test(k));
@@ -98,6 +102,9 @@ function hiddenKinds(keys) {
     }
     const hidden = new Set();
     let found = false;
+    // 채팅을 열기 전 첫 화면의 안내 메시지는 버튼이 통째로 숨겨져 있음 — 그걸 재어 기억해 두면 채팅을 연 뒤에도 '다른 쪽이 숨긴 버튼'으로 남아
+    // 다음에 다시 잴 때(새 답이 올 때)까지 꺼내지 못했음 → 채팅이 열려 있을 때 잰 것만 기억
+    if (!api?.ctx().getCurrentChatId?.()) return hidden;
     for (const key of keys) {
         const btn = document.querySelector(`#chat .mes_buttons .${key}`);
         if (btn) found = true;
@@ -113,9 +120,16 @@ function placeOne(mes, list, hidden) {
     const hint = row?.querySelector('.extraMesButtonsHint');
     if (!row || !extra || !hint) return;
     const lead = k => Object.keys(PAIRS).find(l => PAIRS[l].includes(k)) || k;
-    const wanted = [...new Set(list.map(lead).flatMap(k => [k, ...(PAIRS[k] || [])]))];
+    // 우리가 숨긴 버튼은 꺼내지 않음(⋯ 메뉴 안에 둠): 숨긴 채 줄 맨 앞에 꺼내 두면, '앞에 버튼이 있으면 사이에 세로줄'을 긋는 테마에서
+    // 보이는 첫 버튼 앞에도 줄이 그어졌음
+    const mine = new Set(ownHidden());
+    const wanted = [...new Set(list.map(lead).flatMap(k => [k, ...(PAIRS[k] || [])]))].filter(k => !mine.has(k));
     unplace(row, extra, wanted);
+    // ⋯ 뒤에 붙일 버튼은 ⋯ 다음에 원래 있던 버튼(편집 등) 앞에 차례로
+    let after = false, anchor = hint.nextElementSibling;
+    while (anchor?.classList.contains('etk-pinned')) anchor = anchor.nextElementSibling;
     for (const key of wanted) {
+        if (key === HINT) { after = true; continue; }
         // 다른 확장이 ⋯ 메뉴가 아니라 이름 줄에 바로 붙이는 버튼도 찾아 고정 순서에 넣음 —
         // 전엔 이런 버튼은 그 확장이 붙인 자리(맨 앞)에 그대로 남아, 붙는 때에 따라 순서가 바뀌어 보였음
         const btn = row.querySelector(`:scope > .etk-pinned.${key}`) || extra.querySelector(`:scope > .${key}`) || row.querySelector(`:scope > .${key}, :scope > :not(.extraMesButtons) > .${key}`);
@@ -129,14 +143,14 @@ function placeOne(mes, list, hidden) {
         // 다른 쪽이 줄의 버튼들을 상자 하나로 묶어 두었으면(줄을 격자로 푸는 테마에서 겹침을 막는 묶음) 이미 꺼낸 버튼은 그 안에 그대로 둠 —
         // 다시 줄로 빼면 그쪽이 또 묶어, 둘이 번갈아 옮겼음
         if (btn.classList.contains('etk-pinned') && btn.parentElement !== row && btn.parentElement?.parentElement === row) continue;
-        row.insertBefore(btn, hint);
+        row.insertBefore(btn, after ? anchor : hint);
     }
 }
 
 function placeAll(mesList = document.querySelectorAll('#chat .mes')) {
     const list = pins();
     const lead = k => Object.keys(PAIRS).find(l => PAIRS[l].includes(k)) || k;
-    const hidden = hiddenKinds([...new Set(list.map(lead).flatMap(k => [k, ...(PAIRS[k] || [])]))]);
+    const hidden = hiddenKinds([...new Set(list.filter(k => k !== HINT).map(lead).flatMap(k => [k, ...(PAIRS[k] || [])]))]);
     for (const mes of mesList) {
         if (!mes.isConnected) continue;
         const row = mes.querySelector('.mes_buttons');
@@ -192,6 +206,17 @@ export function start(a) {
     observer.observe(chat, { childList: true, subtree: true });
 }
 
+// 다른 기능(번역 설정의 버튼 숨기기)이 같은 숨김 목록을 고칠 때: 이 기능이 켜져 있을 때만 됨(꺼져 있으면 null)
+export const isHidden = (key) => (api ? hidden().includes(key) : null);
+export function setHidden(key, on) {
+    if (!api || !/^[\w-]+$/.test(key)) return false;
+    const o = api.options(); o.hidden ??= [];
+    o.hidden = on ? [...new Set([...o.hidden, key])] : o.hidden.filter(k => k !== key);
+    // 숨김 목록이 바뀌면 '화면에서 안 보이는 버튼' 기억을 버리고 다시 잼: 숨겨 둔 동안 잰 결과(안 보임)가 남아 있으면
+    // 다시 보이게 한 버튼을 계속 안 보이는 버튼으로 알고 ⋯ 메뉴 안에 그대로 뒀음
+    api.save(); applyHidden(); hiddenMemo.found = false; placeAll();
+    return true;
+}
 export function stop() {
     hideStyle?.remove(); hideStyle = null;
     observer?.disconnect(); observer = null;
@@ -203,6 +228,8 @@ export function stop() {
         const extra = row.querySelector('.extraMesButtons');
         if (extra) unplace(row, extra);
     }
+    api = null;
+    document.dispatchEvent(new Event('breeze-message-buttons-hidden'));   // 꺼서 숨김이 풀린 것도 알린다
 }
 
 export function options(box, a) {
@@ -223,7 +250,8 @@ export function options(box, a) {
         if (knownChanged) a.save();
         const all = [...seenNow];
         for (const key of new Set([...o.pins, ...o.menuOrder, ...o.hidden])) if (!all.some(b => b.key === key) && o.known[key]) all.push({ key, ...o.known[key], mask: '' });
-        const pinnedList = o.pins.map(k => all.find(b => b.key === k)).filter(Boolean);
+        const hintRow = { key: HINT, label: '⋯ 메뉴 버튼 (나머지 버튼이 든 메뉴)', icon: 'fa-solid fa-ellipsis', mask: '', html: '' };
+        const pinnedList = (o.pins.includes(HINT) ? o.pins : [...o.pins, HINT]).map(k => (k === HINT ? hintRow : all.find(b => b.key === k))).filter(Boolean);
         const rank = k => { const i = o.menuOrder.indexOf(k); return i < 0 ? Infinity : i; };
         const menuList = all.filter(b => !o.pins.includes(b.key)).map((b, i) => [b, i]).sort((x, y) => rank(x[0].key) - rank(y[0].key) || x[1] - y[1]).map(x => x[0]);
         const sel = box.querySelector('.etk-pin-sort');
@@ -233,7 +261,7 @@ export function options(box, a) {
         list.className = 'etk-pin-list';
         box.append(list);
         const sections = sort === 'name'
-            ? [{ id: 'all', items: [...pinnedList, ...menuList].sort((x, y) => x.label.localeCompare(y.label, 'ko')) }]
+            ? [{ id: 'all', items: [...pinnedList.filter(b => b.key !== HINT), ...menuList].sort((x, y) => x.label.localeCompare(y.label, 'ko')) }]
             : [{ id: 'pin', title: '메시지에 바로 표시', items: pinnedList }, { id: 'menu', title: '⋯ 메뉴', items: menuList.filter(b => !o.hidden.includes(b.key)) }, { id: 'hidden', title: '숨김', items: menuList.filter(b => o.hidden.includes(b.key)) }];
         for (const sec of sections) {
             if (sec.title) { const h = document.createElement('div'); h.className = 'etk-pin-sec'; h.dataset.sec = sec.id; h.innerHTML = `<span></span><small>${sec.items.length}</small>`; h.firstChild.textContent = sec.title; list.append(h); }
@@ -251,15 +279,16 @@ export function options(box, a) {
         if (b.mask) { ic.className = 'etk-pin-icon etk-pin-mask'; ic.style.webkitMaskImage = ic.style.maskImage = b.mask; }
         else if (b.html && !b.icon) { ic.className = 'etk-pin-icon etk-pin-html'; ic.innerHTML = b.html; }   // 글꼴 아이콘이 없는 버튼(그림 · svg)은 그 그림을 그대로
         const eye = row.querySelector('.etk-eye'), pin = row.querySelector('.etk-tack'), off = o.hidden.includes(b.key);
+        if (b.key === HINT) for (const el of [eye, pin]) { el.style.visibility = 'hidden'; el.style.pointerEvents = 'none'; }   // ⋯ 는 순서만 바꿈(숨기기 · 고정 풀기 없음)
         eye.classList.add(off ? 'fa-eye-slash' : 'fa-eye'); eye.classList.toggle('etk-on', off);
         eye.title = off ? '누르면 다시 보이기' : '누르면 숨기기';
         pin.classList.toggle('etk-on', o.pins.includes(b.key));
         row.classList.toggle('etk-off', off);
-        eye.addEventListener('click', () => { o.hidden = off ? o.hidden.filter(k => k !== b.key) : [...o.hidden, b.key]; a.save(); applyHidden(); render(); });
-        pin.addEventListener('click', () => { o.pins = o.pins.includes(b.key) ? o.pins.filter(k => k !== b.key) : [...o.pins, b.key]; a.save(); placeAll(); render(); });
+        eye.addEventListener('click', () => { o.hidden = off ? o.hidden.filter(k => k !== b.key) : [...o.hidden, b.key]; a.save(); applyHidden(); placeAll(); render(); });
+        pin.addEventListener('click', () => { if (o.pins.includes(b.key)) o.pins = o.pins.filter(k => k !== b.key); else { const l = [...o.pins], at = l.indexOf(HINT); l.splice(at < 0 ? l.length : at, 0, b.key); o.pins = l; } a.save(); placeAll(); render(); });
         // 한 칸씩은 ↑↓ 버튼으로, 멀리 옮길 땐 줄을 끌어서(둘 다 됨)
         const step = (d) => {
-            if (secId === 'pin') { const l = [...o.pins], i = l.indexOf(b.key), j = i + d; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; o.pins = l; placeAll(); }
+            if (secId === 'pin') { const l = o.pins.includes(HINT) ? [...o.pins] : [...o.pins, HINT], i = l.indexOf(b.key), j = i + d; if (j < 0 || j >= l.length) return; [l[i], l[j]] = [l[j], l[i]]; o.pins = l; placeAll(); }
             else { const shown = [...row.parentElement.querySelectorAll('.etk-pin-row')].filter(r => r.dataset.sec === 'menu').map(r => r.dataset.key); const i = shown.indexOf(b.key), j = i + d; if (j < 0 || j >= shown.length) return; [shown[i], shown[j]] = [shown[j], shown[i]]; o.menuOrder = [...shown, ...o.menuOrder.filter(k => !shown.includes(k))]; applyHidden(); }
             a.save(); render();
         };

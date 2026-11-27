@@ -1,0 +1,74 @@
+<div class="etk-pg-settings">
+<div class="etk-pg-help-intro"><button type="button" class="etk-pg-help-close" title="설명 닫기" aria-label="설명 닫기"><i class="fa-solid fa-xmark"></i></button><small class="etk-pg-help">프롬프트 관리자 토글을 그룹으로 묶어요. 프롬프트 목록 위 도구 줄에서 그룹 만들기, ⋯ 메뉴에서 자동으로 묶기·그룹 배치·내보내기/가져오기를 해요. 토글이나 그룹 머리를 끌어서 옮기고, 그룹 머리 위에 놓으면 그 그룹 안으로 들어가요.</small></div>
+<label class="etk-pg-set-row" for="etk_pg_layout">
+    <span>그룹 배치</span>
+    <select id="etk_pg_layout" class="text_pole">
+        <option value="real">그룹 순서 = 실제 위치 (옮기면 실제 위치도 바뀜)</option>
+        <option value="custom">보기만 그룹 순서 (실제 위치는 그대로)</option>
+    </select>
+</label>
+<label class="etk-pg-set-row" for="etk_pg_barPos">
+    <span>도구 줄 위치</span>
+    <select id="etk_pg_barPos" class="text_pole">
+        <option value="auto">자동 (다른 확장과 자리가 겹치면 비켜 감)</option>
+        <option value="top">목록 위</option>
+        <option value="head">"총 토큰" 줄 옆</option>
+        <option value="side">다른 확장 줄과 나란히 (없으면 목록 위)</option>
+        <option value="bottom">목록 맨 밑 (토글을 다 지나서)</option>
+    </select>
+</label>
+<label class="etk-pg-set-row" for="etk_pg_colorStyle">
+    <span>그룹 색 표시</span>
+    <select id="etk_pg_colorStyle" class="text_pole">
+        <option value="dot">점</option>
+        <option value="bar">색 띠</option>
+        <option value="none">없음</option>
+    </select>
+</label>
+<div class="etk-pg-set-row etk-pg-set-ai">
+    <span>AI로 묶기 연결</span>
+    <div id="etk_pg_ai_host"></div>
+    <small class="etk-pg-help">자동 그룹 미리보기의 "AI로 다시 묶기"가 쓸 연결이에요. 지금 채팅 연결 · 실리태번 연결 프로필(모델만 바꿀 수 있음) · 공급자 직접(실리태번에 저장된 키로, 모델을 골라서) 중에서 골라요. 토글 이름만 보내요.</small>
+</div>
+<div class="inline-drawer etk-pg-set-prompts">
+    <div class="inline-drawer-toggle inline-drawer-header">
+        <span>AI 지시문</span>
+        <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+    </div>
+    <div class="inline-drawer-content">
+        <div id="etk_pg_promptSets" class="etk-pg-ps">
+            <small class="etk-pg-help">AI에게 보내는 지시문을 묶음으로 여러 개 저장해 두고 골라 쓸 수 있어요. 고른 묶음이 "AI로 다시 묶기"와 "그룹 이름 한국어로(AI)"에 쓰여요. 답 형식(JSON · "번호 | 이름")은 확장이 알아서 붙여요.</small>
+            <div class="etk-pg-ps-pills" role="radiogroup" aria-label="지시문 묶음"></div>
+            <small class="etk-pg-help etk-pg-ps-default-note">기본 지시문은 고칠 수 없어요. "새 묶음"을 누르면 지금 내용을 복사한 새 묶음이 생겨요.</small>
+            <div class="etk-pg-ps-namerow">
+                <input type="text" class="text_pole etk-pg-ps-name" placeholder="묶음 이름" maxlength="40">
+                <button type="button" class="etk-pg-ps-del" title="이 묶음 지우기" aria-label="이 묶음 지우기"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
+            <div class="etk-pg-set-prompt">
+                <div class="etk-pg-set-prompt-head"><b>AI로 묶기</b><button type="button" class="etk-pg-set-reset" data-etk-pg-reset="etk_pg_aiGroupRules"><i class="fa-solid fa-rotate-left"></i>기본값으로</button></div>
+                <textarea id="etk_pg_aiGroupRules" class="text_pole" rows="8" spellcheck="false"></textarea>
+            </div>
+            <div class="etk-pg-set-prompt">
+                <div class="etk-pg-set-prompt-head"><b>그룹 이름 번역 (AI)</b><button type="button" class="etk-pg-set-reset" data-etk-pg-reset="etk_pg_transRules"><i class="fa-solid fa-rotate-left"></i>기본값으로</button></div>
+                <textarea id="etk_pg_transRules" class="text_pole" rows="3" spellcheck="false"></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+<label class="checkbox_label" for="etk_pg_showPos">
+    <input type="checkbox" id="etk_pg_showPos">
+    <span>토글마다 실제 위치(#번호) 보이기</span>
+</label>
+<label class="checkbox_label" for="etk_pg_showTags">
+    <input type="checkbox" id="etk_pg_showTags">
+    <span>그룹 없이 볼 때 토글 옆에 그룹 이름 보이기</span>
+</label>
+<label class="checkbox_label" for="etk_pg_wrapNames">
+    <input type="checkbox" id="etk_pg_wrapNames">
+    <span>긴 토글 이름은 두 줄까지 보이기</span>
+</label>
+<label class="checkbox_label" for="etk_pg_syncPreset">
+    <input type="checkbox" id="etk_pg_syncPreset">
+    <span>그룹을 프리셋 파일에도 저장 (프리셋을 공유하면 그룹도 같이 가요)</span>
+</label>
+</div>

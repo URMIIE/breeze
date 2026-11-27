@@ -4,6 +4,7 @@
 // 기능마다 끼울 자리를 못 찾으면(다른 실리태번 버전) 그 기능만 쉬고 서버 창에 한 줄 알린다.
 // 켜고 끌 기능은 같은 폴더 config.json 의 "features" (없으면 전부 켬).
 import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -19,7 +20,8 @@ const HERE = path.dirname(new URL(import.meta.url).pathname);
 const ROOT = process.cwd();
 const TAG = '[breeze]';
 // 플러그인 버전: breeze 확장 버전(manifest.json)과 같게 둠(둘이 다른 이름을 쓰면 헷갈려서). 배포할 때 manifest 버전과 함께 올림
-const PLUGIN_VERSION = '1.2.2';
+const PLUGIN_VERSION = '1.2.4';
+const BOOT = Date.now();
 const verNum = (v) => (typeof v === 'number' ? v : String(v || '').split('.').slice(0, 3).reduce((a, n) => a * 1000 + (Number(n) || 0), 0));
 const PLUGIN_FILES = ['index.mjs', 'client-patches.mjs', 'package.json'];
 let updatedTo = 0;
@@ -76,6 +78,9 @@ function updateInfo() {
 const FEATURES = ['lazy_load', 'folder_cache', 'chat_cache', 'no_local_compression', 'regex_hook', 'tab_icon', 'loading_screen', 'light_chat_open', 'early_message_frames', 'near_message_frames', 'settings_once'];
 /** 기능 → 'on' | 'off' | 'mismatch: 까닭' */
 const status = {};
+// 잠시 끔: breeze 설정 창의 '전부 잠시 끄기'가 켜고 끔. 켜져 있으면 가로챈 요청을 전부 원래 처리기로 넘기고 파일도 원본 그대로 보냄
+// (서버를 다시 켜지 않아도, 화면을 새로고침하면 원본을 받아 감). 화면이 따로 부르는 우리 주소(/status · /chat-peek 등)는 그대로 답함
+let paused = readConfig().paused === true;
 const undo = [];   // 서버를 끌 때 되돌릴 일
 
 function config() {
@@ -251,6 +256,7 @@ async function setupSettings() {
     const restJson = JSON.stringify(probe.rest).slice(1, -1);
 
     putFirst(settingsRouter, makeLayer('post', '/get', (request, response, next) => {
+        if (paused) return next();
         // 폴더 기억을 껐으면 화면이 ‘쓸 때만’을 청한 요청만 맡고, 나머지는 원래 처리기로
         if (!cache && !(request.body?.lazyThemes || request.body?.lazyPresets)) return next();
         let body;
@@ -369,6 +375,7 @@ function addPreviewFields(items, fileOf, withSource = false) {
 // memo: 꺼져 있으면 응답을 기억해 두었다 다시 쓰는 것만 안 하고, 미리보기 칸은 그대로 붙임
 function cachedList(key, stampOf, fileOf, withSource = false, memo = true) {
     return (request, response, next) => {
+        if (paused) return next();
         let memoKey, stamp;
         try {
             memoKey = `${request.user.profile?.handle ?? ''}|${key}|${JSON.stringify(request.body ?? {})}`;
@@ -506,7 +513,7 @@ function setupApp(app) {
         if (!layer) rest('no_local_compression', '압축 단계를 못 찾음');
         else {
             const original = layer.handle;
-            layer.handle = function compression(req, res, next) { return isSameMachine(req) ? next() : original(req, res, next); };
+            layer.handle = function compression(req, res, next) { return !paused && isSameMachine(req) ? next() : original(req, res, next); };
             undo.push(() => { layer.handle = original; });
         }
     }
@@ -527,7 +534,7 @@ function setupApp(app) {
     for (const url of new Set(patches.map(p => p.url))) patchedText(url);   // 켤 때 한 번 맞춰 보고 안 맞으면 알림
 
     const serve = (req, res, next) => {
-        if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+        if (paused || (req.method !== 'GET' && req.method !== 'HEAD')) return next();
         const p = req.path;
         if (status.tab_icon === 'on' && (p === '/favicon.ico' || p.startsWith('/img/')) && TAB_ICON.test(path.basename(p))) {
             const name = path.basename(p);
@@ -641,7 +648,7 @@ export async function init(router) {
     // breeze이 상태를 물어보는 주소. 여기까지 온 첫 요청으로도 앱을 찾음
     // wanted = config.json 에 적힌 켜짐(다음에 서버를 켤 때 쓸 값). 지금 상태(features)와 다르면 서버를 다시 켜야 바뀜
     const wantedAll = () => Object.fromEntries(FEATURES.map(f => [f, wanted(f)]));
-    router.get('/status', (req, res) => { withApp(req.app); res.send({ version: 2, ...updateInfo(), features: status, wanted: wantedAll() }); });
+    router.get('/status', (req, res) => { withApp(req.app); res.send({ version: 2, ...updateInfo(), features: status, wanted: wantedAll(), paused, boot: BOOT }); });
     // 월드인포 폴더 화면: 월드인포마다 항목 수 · 켜진 수 · 상시 수 · 수정 시각(화면 쪽이 토큰 수를 다시 셀지 정함).
     // 화면 쪽에서 월드인포를 하나씩 다 받아 세면 월드인포가 많을 때 열 때마다 수십 번 요청 → 서버가 파일을 읽어 한 번에(파일이 그대로면 지난번 값)
     const wiMemo = new Map();
@@ -678,6 +685,30 @@ export async function init(router) {
             if (typeof req.body?.auto === 'boolean') { const json = readConfig(); json.autoUpdate = req.body.auto; writeConfig(json); }
             if (req.body?.apply === true) applyUpdate();
             res.send(updateInfo());
+        } catch (e) { res.status(500).send({ error: e.message }); }
+    });
+    // 서버 다시 켜기(화면의 버튼): 같은 명령으로 새 서버를 띄우고 이 서버는 끈다. 실리태번에는 다시 켜는 기능이 없어서 서버 창에 가서 껐다 켜야 했음.
+    //   순서: 응답을 보냄 → 실리태번의 끄기 처리(플러그인 정리 포함)를 그대로 부름 → 꺼지는 순간 새 서버를 띄움(이 서버가 포트를 놓은 뒤라 겹치지 않음).
+    //   새 서버는 같은 창에 기록을 계속 찍지만 그 창의 앞 프로세스가 아니게 된다(창에서 Ctrl+C 로는 안 꺼짐 — 화면에서 미리 알림).
+    let restarting = false;   // boot(이 서버가 켜진 때)는 화면이 '새 서버로 바뀌었는지' 알아보는 데 씀
+    router.post('/restart', (req, res) => {
+        if (restarting) return res.send({ ok: true, boot: BOOT });
+        restarting = true;
+        res.send({ ok: true, boot: BOOT });
+        console.log('[breeze-server] 화면에서 서버 다시 켜기를 눌렀어요. 새 서버를 띄우고 이 서버를 꺼요.');
+        process.once('exit', () => {
+            try { spawn(process.execPath, [...process.execArgv, ...process.argv.slice(1)], { cwd: process.cwd(), env: process.env, stdio: ['ignore', 'inherit', 'inherit'], detached: true }).unref(); }
+            catch (e) { console.error('[breeze-server] 새 서버를 띄우지 못했어요. 직접 다시 켜 주세요.', e?.message || e); }
+        });
+        setTimeout(() => { if (process.listenerCount('SIGINT')) process.emit('SIGINT'); else process.exit(0); }, 300);
+    });
+    // 잠시 끄기 · 다시 켜기: 바로 바뀜(화면은 새로고침해야 원본 파일을 받아 감). config.json 에도 적어 서버를 다시 켜도 그대로
+    router.post('/pause', (req, res) => {
+        try {
+            if (typeof req.body?.on !== 'boolean') return res.status(400).send({ error: 'bad request' });
+            paused = req.body.on;
+            const json = readConfig(); if (paused) json.paused = true; else delete json.paused; writeConfig(json);
+            res.send({ version: 2, features: status, wanted: wantedAll(), paused });
         } catch (e) { res.status(500).send({ error: e.message }); }
     });
     // 기능 켜고 끄기: config.json 에 적어 둠. 기능은 서버가 켜질 때 한 번 끼우므로 서버를 다시 켜야 바뀜

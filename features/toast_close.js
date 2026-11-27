@@ -13,6 +13,22 @@ function sticky(options) {
     return Number(pick('timeOut')) === 0 || pick('tapToDismiss') === false;
 }
 
+// × 가 알림 바탕과 거의 같은 색이면(흰 바탕에 흰 ×, 검은 바탕에 검은 ×) 그 알림에서만 색을 바꿈.
+// 알림 도구는 × 를 흰색으로 그리는데 테마가 알림 바탕만 밝게 바꾸면 × 가 묻힘. 잘 보이는 알림은 손대지 않음(테마가 정한 색 그대로).
+// 바탕이 많이 비치는 알림은 뒤 화면 색을 알 수 없어 판단하지 않음.
+function rgba(text) { const m = /rgba?\(([^)]+)\)/.exec(text || ''); if (!m) return null; const p = m[1].split(/[,\s/]+/).filter(Boolean).map(Number); return p.length >= 3 ? [p[0], p[1], p[2], p[3] ?? 1] : null; }
+function light(c) { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
+function gap(a, b) { const x = light(a), y = light(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+function readable(toast) {
+    const x = toast?.querySelector?.('.toast-close-button');
+    if (!x || !toast.isConnected) return;
+    const bg = rgba(getComputedStyle(toast).backgroundColor), fg = rgba(getComputedStyle(x).color);
+    if (!bg || !fg || bg[3] < 0.6 || gap(bg, fg) >= 2.2) return;
+    const text = rgba(getComputedStyle(toast).color);
+    const pick = text && gap(bg, text) >= 3 ? `rgb(${text[0]}, ${text[1]}, ${text[2]})` : light(bg) > 0.4 ? '#222' : '#fff';
+    x.style.setProperty('color', pick, 'important');
+}
+
 export function start(a) {
     api = a;
     document.documentElement.classList.add('etk-toast-close');   // × 자리 맞추기(style.css)
@@ -24,7 +40,9 @@ export function start(a) {
         toastr[kind] = mine[kind] = function (message, title, options) {
             const m = mode();
             if (m === 'none' || options?.closeButton === false || (m === 'sticky' && !sticky(options))) return orig.apply(this, arguments);
-            return orig.call(this, message, title, { ...(options || {}), closeButton: true });
+            const el = orig.call(this, message, title, { ...(options || {}), closeButton: true });
+            requestAnimationFrame(() => readable(el?.[0] || el));
+            return el;
         };
     }
 }

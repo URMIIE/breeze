@@ -2,7 +2,7 @@
 // 실리태번 창은 채팅을 하나씩만 지우거나 내보낼 수 있고, 어떤 채팅인지는 열어서 읽어 봐야 안다.
 // ① 줄마다 언제 · 메시지 몇 개 · (알면) 언제부터 며칠 한 채팅인지, 지금 열린 채팅 표시
 // ② 줄의 ∨: 채팅을 열지 않고 처음 두 마디 · 끝 두 마디를 그 자리에(그때 한 번 그 채팅 파일을 읽음). 번역문(extra.display_text)이 있으면 번역문으로,
-//    화면 표시용 정규식도 거쳐 채팅 화면에서 보이는 글로. 열기 · 이름 · 내보내기 · 지우기도 여기에(실리태번 버튼을 대신 눌러 줌 — 지우기만 보관을 거치는 우리 흐름)
+//    화면 표시용 정규식도 거쳐 채팅 화면에서 보이는 글로. 내보내기 · 지우기도 여기에(열기는 줄을 누르면 되므로 버튼을 두지 않음)(실리태번 버튼을 대신 눌러 줌 — 지우기만 보관을 거치는 우리 흐름)
 // ③ 정렬(최근 · 오래된 · 메시지 많은 · 이름) ④ '선택': 여러 개 골라 내보내기(zip) · 지우기. 지금 열린 채팅은 못 고름
 // ⑤ 지우기 전에 채팅을 user/files 에 따로 보관(7일), 지운 직후 알림 · 세부 설정의 보관함에서 되돌리기. 보관에 실패한 채팅은 지우지 않음.
 // 목록 자료(메시지 수 · 마지막 시각)는 실리태번이 받는 /api/chats/search 응답을 옆에서 읽기만 함(응답은 그대로).
@@ -95,6 +95,10 @@ function decorateRow(row, s) {
         const more = document.createElement('div');
         more.className = 'etk-cfl-more fa-solid fa-chevron-down interactable'; more.tabIndex = 0; more.title = '처음 · 끝 대화 보기';
         (block.querySelector('.select_chat_actions') || block).after(more);
+        // 이름 바꾸기는 줄에 바로(펼쳐야 나오는 버튼들 속에 있으면 이름 하나 바꾸려고 두 번 눌러야 했음)
+        const ren = document.createElement('div');
+        ren.className = 'etk-cfl-rename fa-solid fa-pencil interactable'; ren.tabIndex = 0; ren.title = '채팅 이름 바꾸기';
+        more.before(ren);
         const check = document.createElement('input');
         check.type = 'checkbox'; check.className = 'etk-cfl-check'; check.tabIndex = -1;
         row.prepend(check);
@@ -244,8 +248,6 @@ async function openPeek(row, s) {
     if (!box.isConnected) return;
     const current = isCurrent(row);
     box.innerHTML = `<div class="etk-cfl-lines">${body}</div><div class="etk-cfl-acts">
-        ${current ? '' : '<span class="interactable" tabindex="0" data-act="open"><i class="fa-solid fa-arrow-right"></i> 열기</span>'}
-        <span class="interactable" tabindex="0" data-act="rename"><i class="fa-solid fa-pencil"></i> 이름</span>
         <span class="interactable" tabindex="0" data-act="jsonl"><i class="fa-solid fa-file-export"></i> 내보내기</span>
         <span class="interactable" tabindex="0" data-act="txt"><i class="fa-solid fa-file-lines"></i> 글 파일로</span>
         ${current ? '' : '<span class="interactable etk-cfl-danger" tabindex="0" data-act="delete"><i class="fa-solid fa-trash-can"></i> 지우기</span>'}</div>`;
@@ -268,6 +270,7 @@ function onListClick(e) {
         paintBars();
         return;
     }
+    if (e.target.closest('.etk-cfl-rename')) { stop(); row.querySelector('.renameChatButton')?.click(); fitRenameBox(file); return; }
     if (e.target.closest('.etk-cfl-more')) {
         stop();
         if (opened.has(file)) { opened.delete(file); row.classList.remove('etk-cfl-open'); row.querySelector('.etk-cfl-peek')?.remove(); }
@@ -278,8 +281,7 @@ function onListClick(e) {
     if (act) {
         stop();
         const press = (sel) => row.querySelector(sel)?.click();
-        if (act === 'open') { opened.delete(file); row.querySelector('.etk-cfl-peek')?.remove(); row.querySelector('.select_chat_block').click(); }
-        else if (act === 'rename') press('.renameChatButton');
+        if (act === 'rename') { press('.renameChatButton'); fitRenameBox(file); }
         else if (act === 'jsonl') press('.exportRawChatButton');
         else if (act === 'txt') press('.exportChatButton');
         else if (act === 'delete') removeChats([file]);
@@ -287,8 +289,22 @@ function onListClick(e) {
     }
     if (e.target.closest('.etk-cfl-peek')) stop();   // 펼친 글을 눌러도 채팅이 열리지 않게(글 고르기 · 복사)
 }
+// 실리태번 이름 바꾸기 창의 글 칸은 한 줄 높이라, 긴 채팅 이름이 접히면 커서가 있는 끝줄('… - Branch #1')만 보여 이름이 바뀐 것처럼 보였다
+//   → 창이 뜨면 칸을 이름이 다 보이는 높이로(고치는 동안에도 맞춤)
+function fitRenameBox(file) {
+    const name = String(file).replace(/\.jsonl$/, '');
+    const until = Date.now() + 2000;
+    const look = () => {
+        const box = [...document.querySelectorAll('dialog[open] textarea.popup-input')].find(t => t.value === name);
+        if (!box) { if (Date.now() < until) requestAnimationFrame(look); return; }
+        const fit = () => { box.style.height = 'auto'; box.style.height = `${box.scrollHeight + box.offsetHeight - box.clientHeight}px`; };
+        fit(); box.scrollTop = 0;
+        box.addEventListener('input', fit);
+    };
+    requestAnimationFrame(look);
+}
 function onListKey(e) {
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.etk-cfl-more, .etk-cfl-acts [data-act]')) { e.preventDefault(); e.target.click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.etk-cfl-more, .etk-cfl-rename, .etk-cfl-acts [data-act]')) { e.preventDefault(); e.target.click(); }
 }
 function onSortChange(e) {
     if (!e.target.matches('.etk-cfl-sort')) return;
@@ -490,7 +506,7 @@ export function stop() {
     l.removeEventListener('click', onListClick, true);
     l.removeEventListener('keydown', onListKey);
     l.classList.remove('etk-cfl', 'etk-cfl-selecting');
-    l.querySelectorAll('.etk-cfl-info, .etk-cfl-more, .etk-cfl-check, .etk-cfl-peek').forEach(x => x.remove());
+    l.querySelectorAll('.etk-cfl-info, .etk-cfl-more, .etk-cfl-rename, .etk-cfl-check, .etk-cfl-peek').forEach(x => x.remove());
     l.querySelectorAll('.etk-cfl-open, .etk-cfl-current').forEach(x => x.classList.remove('etk-cfl-open', 'etk-cfl-current'));
     popup()?.querySelectorAll(':scope > .etk-cfl-bar, :scope > .etk-cfl-foot').forEach(x => x.remove());
     popup()?.classList.remove('etk-cfl-no-pick');

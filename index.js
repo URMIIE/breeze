@@ -1,7 +1,7 @@
 // breeze — 설정 창과 기능 불러오기. 기능 코드는 features/ 아래 파일마다 하나씩.
 import { koMatch } from './lib/ko-match.js';
-import { embedFiles, restoreFiles, downloadText, pickFile, saveUserFile } from './lib/files.js';
-import { FEATURES, GROUPS, BUNDLES } from './features.js';
+import { saveUserFile } from './lib/files.js';
+import { FEATURES, GROUPS, BUNDLES, SERVER_FEATURES } from './features.js';
 import { onThemeCss } from './lib/theme-css.js';
 
 const KEY = 'breeze';
@@ -135,21 +135,17 @@ function stateHtml(id) {
     const lines = [whoText(info.who) && `누가: ${esc(whoText(info.who))}`, info.saw && `본 것: ${esc(info.saw)}`, esc(info.back || STATE_BACK[st])].filter(Boolean);
     return `<div class="etk-card-state etk-state-${st}"><b>${esc(STATE_HEAD[st])}</b>${lines.map(l => `<div>${l}</div>`).join('')}</div>`;
 }
-const restCount = (g) => FEATURES.filter(f => f.group === g && shownState(f.id) && shownState(f.id) !== 'error').length;
 function paintState(id) {
     const root = dialog();
     if (!root) return;
-    // 줄은 통째로 다시 그림: 상태가 생기거나 없어지면 표시뿐 아니라 '눌러서 이유 보기'(›)도 같이 바뀜. 묶음에 든 기능이면 묶음 줄도
+    // 줄은 통째로 다시 그림: 상태가 생기거나 없어지면 표시뿐 아니라 '눌러서 이유 보기'(자세히 ›)도 같이 바뀜. 묶음에 든 기능이면 묶음 줄도
     const me = FEATURES.find(x => x.id === id);
-    if (me) for (const row of root.querySelectorAll(`.etk-row[data-id="${id}"]`)) row.outerHTML = rowHtml(me);
-    if (me?.bundle) for (const row of root.querySelectorAll('.etk-row[data-bundle]')) if (row.dataset.bundle === me.bundle) row.outerHTML = bundleRowHtml({ bundle: me.bundle, members: FEATURES.filter(x => x.bundle === me.bundle) });
+    if (me) for (const row of root.querySelectorAll(`.etk-row[data-id="${id}"]`)) row.outerHTML = rowHtml(me, row.classList.contains('etk-row-sub'));
+    if (me?.bundle) for (const row of root.querySelectorAll('.etk-row[data-bundle]')) if (row.dataset.bundle === me.bundle) row.outerHTML = bundleRowHtml(me.bundle, row.classList.contains('etk-opened'));
     for (const box of root.querySelectorAll(`.etk-detail[data-id="${id}"]`)) {
         box.querySelector(':scope > .etk-card-state')?.remove();
         (box.querySelector(':scope > .etk-detail-desc') || box.querySelector(':scope > .etk-detail-on'))?.insertAdjacentHTML('afterend', stateHtml(id));
     }
-    const f = FEATURES.find(x => x.id === id);
-    const rest = f && root.querySelector(`.etk-section[data-fold="${CSS.escape(f.group)}"] .etk-sec-rest`);
-    if (rest) { const n = restCount(f.group); rest.textContent = n ? `쉬는 중 ${n}` : ''; }
 }
 // breeze 기능 파일에서 난 오류는 그 기능 칸에 표시(어느 기능인지는 오류가 난 파일 이름으로)
 const errorOwner = (err) => { const st = String(err?.stack || ''); const i = st.indexOf(`${BASE}features/`); return i < 0 ? undefined : st.slice(i + BASE.length).match(/^features\/(\w+)\.js/)?.[1]; };
@@ -192,71 +188,172 @@ async function stopFeature(id) {
 }
 
 // ───────── 설정 창 ─────────
-// 확장 설정 목록에는 ‘설정 열기’ 한 줄만 두고, 설정은 따로 뜨는 작은 창에서 한다: 기능을 한 줄씩 늘어놓고, 세부 설정은 같은 창 안에서 넘어가 보고 ← 로 돌아옴.
-// 예전엔 화면을 덮는 큰 창이라 열어 둔 채 채팅 · 다른 메뉴를 쓸 수 없었고, 휴대폰과 PC 의 구조도 달랐음 →
+// 확장 설정 목록에는 ‘설정 열기’ 한 줄만 두고, 설정은 따로 뜨는 작은 창에서 한다: 위에 갈래 버튼 다섯, 그 아래 고른 갈래의 기능만 한 줄씩.
+// 묶음 줄은 그 자리에서 펼쳐 안의 기능을 하나씩 켜고 끔. 세부 설정은 같은 창 안에서 넘어가 보고 ← 로 돌아옴(PC 는 오른쪽 칸).
 // 뒤를 가리지 않는 창(PC 는 위 줄을 끌어 옮김 · 자리 기억, 휴대폰은 아래에서 올라오고 손잡이로 높이 조절). 바깥을 눌러도 닫히지 않음(다른 일을 하다 닫히지 않게)
 const LOGO = '';
 const SERVER_TAB = '서버 플러그인';
-const SERVER_NAMES = { lazy_load: '프리셋 · 테마를 쓸 때만 불러오기', folder_cache: '바뀌지 않은 설정 폴더는 다시 읽지 않기', chat_cache: '바뀌지 않은 채팅은 다시 읽지 않기',
-    no_local_compression: '같은 컴퓨터에서는 압축 없이 보내기', regex_hook: '메시지별 정규식 유지용 연결 지점', tab_icon: '브라우저 탭 아이콘 바꾸기', loading_screen: '로딩 화면 파일 읽기', light_chat_open: '채팅을 열 때 캐릭터 칸 가볍게 채우기', early_message_frames: '상태창 먼저 띄우기 (태번 헬퍼 4.8.15 이상)', near_message_frames: '먼 상태창은 가까워질 때 그리기', settings_once: '설정 묶음 한 번만 받기' };
-// 서버 기능은 화면에 묶음으로 보임: 하나씩 골라 끌 일이 없고 이름이 비슷해 헷갈렸음. 켜고 끄기는 묶음째, 안에 든 것은 펼쳐서 보기만.
-// 서버 플러그인 쪽은 기능마다 따로 켜고 쉬는 그대로(묶음은 화면에서만)
-const SERVER_GROUPS = [
-    { name: '실리태번을 처음 열 때 로딩 줄이기', desc: '실리태번 화면을 열거나 새로고침할 때 받아 오는 양을 줄여요.', members: ['lazy_load', 'folder_cache', 'settings_once', 'no_local_compression'] },
-    { name: '채팅 빨리 열기', desc: '채팅을 열면 보이는 상태창부터 띄우고, 먼 상태창은 가까워질 때 그려요.', members: ['light_chat_open', 'early_message_frames', 'near_message_frames', 'chat_cache'] },
-    { name: '브라우저 탭 아이콘 바꾸기', members: ['tab_icon'] },
-];
-// 다른 기능이 쓰는 받침이라 줄에 안 보이고 늘 켜 둠(쉬는 중일 때만 보임)
-const SERVER_HIDDEN = ['regex_hook', 'loading_screen'];
+// 목록 줄 전부: breeze 기능 + 서버 플러그인 기능(features.js 순서 그대로)
+const ALL = [...FEATURES, ...SERVER_FEATURES];
+const isServer = (f) => !!f?.server;
 const serverOn = (v) => v !== 'off' && !String(v).startsWith('off (');
-/** 화면에 보일 줄: 묶음(이 서버에 있는 기능만) + 묶음에 없는 새 기능은 한 줄씩 */
-function serverRows(features) {
-    const grouped = new Set([...SERVER_GROUPS.flatMap(g => g.members), ...SERVER_HIDDEN]);
-    return [...SERVER_GROUPS.map(g => ({ ...g, members: g.members.filter(k => k in features) })).filter(g => g.members.length),
-        ...Object.keys(features).filter(k => !grouped.has(k)).map(k => ({ name: SERVER_NAMES[k] || k, members: [k] }))];
-}
-// 마지막으로 본 화면(목록 · 기능) · 목록 스크롤 · 창 자리(PC) · 창 높이(휴대폰, 화면 높이에 대한 비율)는 브라우저에 기억
+// 마지막으로 본 화면(목록 · 기능) · 고른 갈래 · 목록 스크롤 · 창 자리(PC) · 창 높이(휴대폰, 화면 높이에 대한 비율)는 브라우저에 기억
 const UI_KEY = 'breeze.ui';
 const uiSaved = (() => { try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch { return {}; } })();
-const ui = { view: typeof uiSaved.view === 'string' ? uiSaved.view : null, query: '', quickOpen: new Set(uiSaved.quickOpen || []), fold: new Set(uiSaved.fold || []), scroll: uiSaved.scroll || 0, pos: uiSaved.pos || null, sheet: uiSaved.sheet || null, size: uiSaved.size || null };
-const rememberUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify({ view: ui.view, quickOpen: [...ui.quickOpen], fold: [...ui.fold], scroll: ui.scroll, pos: ui.pos, sheet: ui.sheet, size: ui.size })); } catch { /* 저장소 막힘 */ } };
+const ui = {
+    view: typeof uiSaved.view === 'string' ? uiSaved.view : null,
+    tab: GROUPS.some(g => g.name === uiSaved.tab) ? uiSaved.tab : GROUPS[0].name,
+    open: new Set(),   // 펼친 묶음(창을 닫았다 열면 접힘)
+    query: '', quickOpen: new Set(uiSaved.quickOpen || []), scroll: uiSaved.scroll || 0, pos: uiSaved.pos || null, sheet: uiSaved.sheet || null, size: uiSaved.size || null,
+    split: uiSaved.split > 0 && uiSaved.split < 1 ? uiSaved.split : null,   // 두 칸일 때 왼쪽 칸 폭(창 안쪽 폭에 대한 비율). null = 기본
+};
+const rememberUi = () => { try { localStorage.setItem(UI_KEY, JSON.stringify({ view: ui.view, tab: ui.tab, quickOpen: [...ui.quickOpen], scroll: ui.scroll, pos: ui.pos, sheet: ui.sheet, size: ui.size, split: ui.split })); } catch { /* 저장소 막힘 */ } };
 const esc = (v) => String(v ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const dialog = () => document.getElementById('etk_dialog');
 // 드롭다운에 꺼내 둔 기능(자주 켜고 끄는 것)
 const quick = () => (settings().quick ??= []);
-const onCount = (g) => FEATURES.filter(f => (!g || f.group === g) && settings().enabled[f.id]).length;
-// 세부 설정이 없는 기능도 쉬는 중 · 일부 쉼 · 물러남 · 오류면 눌러서 그 이유를 볼 수 있게(이유는 세부 설정 화면에만 나와서, 설정이 없는 기능은 볼 길이 없었음)
-const stateOf = (f) => (f.members ? f.members.map(m => shownState(m.id)).find(Boolean) : shownState(f.id)) || null;
-const hasMore = (f) => !!(f.hasOptions || f.hasAction || stateOf(f));
+const onCount = () => FEATURES.filter(f => settings().enabled[f.id]).length;
+
+// ── 입력창 옆 마법봉 메뉴(#extensionsMenu)에 두는 줄
+// 설정 wandMenu = 줄을 둘 것의 id 목록: 'breeze' 는 설정 창을, 기능 id 는 그 기능의 세부 설정을 엶. 칸이 없으면(옛 설정) 줄도 없음. 꺼진 기능은 줄을 두지 않음
+const WAND_SELF = 'breeze';
+// 그 메뉴에 자기 줄을 스스로 넣는 기능: 같은 기능에 줄이 둘 생기지 않게 여기서는 줄도 버튼도 두지 않음
+const OWN_WAND_ROW = new Set(['theme_fit']);
+// 줄을 둘 수 있는 기능: 쓰다가 자주 여는 화면이 있는 것만. 한 번 정하면 다시 안 여는 설정에까지 체크칸이 붙어 있으니 쓸데없는 곳에 다 있다는 지적을 받았다(나머지는 breeze 줄로 설정 창을 열어서 간다)
+const WAND_FEATURES = new Set(['done_sound', 'prompt_groups', 'chat_memory']);
+const canWand = (f) => WAND_FEATURES.has(f.id) && !!f.hasOptions && !isServer(f) && !OWN_WAND_ROW.has(f.id);
+const inWand = (id) => !!settings().wandMenu?.includes(id);
+function wandRows() {
+    const s = settings(), list = s.wandMenu || [];
+    const self = list.includes(WAND_SELF) ? [{ id: WAND_SELF, icon: 'wind', name: 'breeze' }] : [];
+    return self.concat(FEATURES.filter(f => canWand(f) && s.enabled[f.id] && list.includes(f.id)));
+}
+function wandRowEl(r) {
+    const el = document.createElement('div');
+    el.className = 'list-group-item flex-container flexGap5 interactable etk-wand-row';
+    el.dataset.wand = r.id;
+    el.tabIndex = 0;
+    el.innerHTML = `<div class="fa-solid fa-${esc(r.icon)} extensionsMenuExtensionButton"></div>${esc(r.name)}`;
+    el.addEventListener('click', () => { globalThis.jQuery?.('#extensionsMenu').hide(); r.id === WAND_SELF ? openDialog() : openOptions(r.id); });
+    return el;
+}
+// 메뉴의 우리 줄을 설정과 같게 맞춤: 이미 같으면 아무것도 안 건드림(그래서 아래 감시가 우리가 넣은 것에 다시 불려도 거기서 멈춤)
+// 줄이 하나라도 있을 때만 그 메뉴 한 곳의 자식 목록을 지켜봄: 다른 쪽이 메뉴를 비우거나 다시 그려 줄이 사라지면 다시 넣음
+let wandWatch = null;
+function syncWand() {
+    const menu = document.getElementById('extensionsMenu');
+    if (!menu) return;
+    const want = wandRows(), have = [...menu.querySelectorAll('.etk-wand-row')];
+    if (have.length !== want.length || want.some((r, i) => have[i].dataset.wand !== r.id)) {
+        for (const el of have) el.remove();
+        menu.append(...want.map(wandRowEl));
+    }
+    if (want.length && !wandWatch) { wandWatch = new MutationObserver(syncWand); wandWatch.observe(menu, { childList: true }); }
+    if (!want.length && wandWatch) { wandWatch.disconnect(); wandWatch = null; }
+}
+function toggleWand(id) {
+    const list = (settings().wandMenu ??= []), at = list.indexOf(id);
+    if (at < 0) list.push(id); else list.splice(at, 1);
+    save();
+    syncWand();
+    // 같은 체크가 설정 창과 확장 목록 칸 두 곳에 떠 있을 수 있어 둘 다 맞춤
+    for (const el of document.querySelectorAll(`[data-wand-check="${id}"]`)) el.checked = at < 0;
+}
+// 기능의 세부 설정 본문에 끼우는 체크 줄: '확장 창에도 보이기' 체크와 그 설명 바로 아래, 그 체크가 없는 기능은 본문 맨 위. 모양도 그 줄과 같게
+// 본문을 통째로 다시 그리는 기능이 있어서, 열려 있는 그 본문 하나의 자식 목록만 지켜보다 줄이 사라지면 다시 끼움
+const wandCheckWatched = new WeakSet();
+function addWandCheck(box, id) {
+    const f = FEATURES.find(x => x.id === id);
+    if (!f || !canWand(f)) return;
+    placeWandCheck(box, f);
+    if (wandCheckWatched.has(box)) return;
+    wandCheckWatched.add(box);
+    new MutationObserver(() => { if (!box.querySelector(':scope > .etk-wand-check')) placeWandCheck(box, f); }).observe(box, { childList: true });
+}
+function placeWandCheck(box, f) {
+    const id = f.id;
+    box.querySelectorAll(':scope > .etk-wand-check').forEach(el => el.remove());
+    const label = document.createElement('label'), note = document.createElement('small');
+    label.className = 'checkbox_label etk-wand-check';
+    label.innerHTML = `<input type="checkbox" data-wand-check="${esc(id)}"${inWand(id) ? ' checked' : ''}><span>마법봉 메뉴에도 보이기</span>`;
+    note.className = 'etk-wand-check';
+    note.textContent = `켜면 마법봉 메뉴에도 ‘${f.name}’ 줄이 생겨요.`;
+    label.firstElementChild.addEventListener('change', () => toggleWand(id));
+    const above = box.querySelector(':scope > label:has([data-k="separate"])');
+    const after = above?.nextElementSibling?.tagName === 'SMALL' ? above.nextElementSibling : above;
+    if (after) after.after(label, note); else box.prepend(label, note);
+}
+function openOptions(id) {
+    const f = FEATURES.find(x => x.id === id);
+    if (!f) return;
+    ui.tab = f.group; ui.query = '';
+    if (f.bundle) ui.open.add(f.bundle);
+    ui.view = hasMore(f) ? id : null;
+    if (dialog()) renderDialog(); else openDialog();
+}
+// 세부 설정이 없는 기능도 쉬는 중 · 일부 쉼 · 물러남 · 오류면 눌러서 그 이유를 볼 수 있게(이유는 세부 설정 화면에만 나옴)
+const stateOf = (f) => shownState(f.id) || null;
+const hasMore = (f) => (isServer(f) ? !!f.hasOptions && serverOf(f).have : !!(f.hasOptions || f.hasAction || stateOf(f)));
 const sheet = () => matchMedia('(max-width: 700px)').matches;
-const touchOnly = () => matchMedia('(hover: none)').matches;
-// PC(아래에서 올라오는 창이 아니고, 넓힐 자리가 있을 때): 세부 설정을 열면 창을 넓혀 왼쪽 목록 · 오른쪽 세부 설정 두 칸으로(목록으로 돌아갔다 다시 들어가지 않게)
+// PC(아래에서 올라오는 창이 아니고, 넓힐 자리가 있을 때): 세부 설정 · 서버 화면을 열면 창을 넓혀 왼쪽 목록 · 오른쪽 칸 두 칸으로
 const NARROW_W = 460, WIDE_W = 900;
 const twoPane = () => !sheet() && innerWidth - 16 >= 760;
-// ui.inPlace: 오른쪽 칸이 닫혀 목록만 있을 때 아래 '서버'를 누르면 창을 넓히지 않고 그 자리에서 서버 화면으로(뒤로 가기로 목록)
-const wide = () => twoPane() && !!ui.view && !ui.inPlace;
+const wide = () => twoPane() && !!ui.view;
+const viewOf = (id) => ALL.find(x => x.id === id) || null;
 
-// 서버 플러그인 칸 숫자(작동 중 / 전체): 서버에 물어봐야 알아서 한 번 받아 두고 칸에 채움, 없으면 ‘없음’
-let serverCount = '', serverCountAsked = false;
-let serverNew = false, serverNewWhy = '';
-function setServerCount(features, data) {
-    const rows = features ? serverRows(features) : [];
-    serverCount = features ? `${rows.filter(g => g.members.some(k => features[k] === 'on')).length} / ${rows.length}` : '없음';
-    // 아래 줄 '서버' 옆 NEW: 새 판이 있거나, 서버를 다시 켜야 적용되는 게 있을 때(바꿔 둔 새 판 · 켜고 끈 서버 기능). 서버 화면에 안 들어가도 알게
-    const restart = !!features && (pv(data?.updated || 0) > pv(data?.plugin || 0)
-        || Object.entries(data?.wanted || {}).some(([k, want]) => k in features && (want !== false) !== (features[k] !== 'off' && !String(features[k]).startsWith('off ('))));
-    serverNew = !!features && (newPlugin(data) || restart);
-    serverNewWhy = restart ? '서버를 다시 켜야 바뀐 게 적용돼요' : '서버 플러그인 새 버전이 있어요';
-    dialog()?.querySelectorAll('.etk-server-count').forEach(el => { el.textContent = serverCount; });
-    dialog()?.querySelectorAll('.etk-foot-server').forEach(el => { el.classList.toggle('etk-has-new', serverNew); el.title = serverNew ? serverNewWhy : '서버 플러그인'; });
+// ── 서버 플러그인 상태: 한 번 물어 두고 줄 · … 버튼 · 서버 화면이 같이 씀. undefined = 아직 모름, null = 플러그인 없음
+let serverData;
+let serverAsking = null;
+let serverNew = false;
+function askServer(force = false) {
+    if (serverAsking && !force) return serverAsking;
+    serverAsking = fetch('/api/plugins/breeze-server/status', { headers: ctx().getRequestHeaders() })
+        .then(res => (res.ok ? res.json() : null)).catch(() => null)
+        .then((d) => { setServer(d?.features ? d : null); return serverData; });
+    return serverAsking;
 }
-async function askServerCount() {
-    if (serverCountAsked) return; serverCountAsked = true;
-    try { const res = await fetch('/api/plugins/breeze-server/status', { headers: ctx().getRequestHeaders() }); const d = res.ok ? await res.json() : null; setServerCount(d?.features || null, d); } catch { setServerCount(null); }
+// 다시 켜야 적용되는 게 있는지(바꿔 둔 새 판 · 켜고 끈 서버 기능)와 새 판이 있는지
+function serverNews(d) {
+    const f = d?.features;
+    if (!f) return { restart: false, newer: false };
+    const flipped = Object.entries(d.wanted || {}).some(([k, want]) => k in f && (want !== false) !== serverOn(f[k]));
+    return { restart: pv(d.updated || 0) > pv(d.plugin || 0) || flipped, newer: newPlugin(d) };
+}
+function setServer(d) {
+    serverData = d;
+    const { restart, newer } = serverNews(d);
+    serverNew = restart || newer;
+    const root = dialog();
+    if (!root) return;
+    root.querySelector('.etk-more')?.classList.toggle('etk-has-new', serverNew);
+    // 줄에 보이는 서버 기능(켜짐 · 없음 · 다시 켜면)을 새 상태로
+    if (root.querySelector('.etk-row[data-id^="srv:"], .etk-row[data-bundle]')) rerenderList();
+}
+// 서버 기능 줄 하나의 상태: have = 이 서버에 그 기능이 있음, can = 켜고 끌 수 있는 판, pending = 서버를 다시 켜야 바뀜
+function serverOf(f) {
+    if (serverData === undefined) return { ready: false };
+    const feats = serverData?.features;
+    const names = feats ? f.server.filter(k => k in feats) : [];
+    if (!names.length) return { ready: true, have: false };
+    const wanted = serverData.wanted;
+    const wants = names.map(k => (wanted ? wanted[k] !== false : serverOn(feats[k])));
+    const on = wants.some(Boolean);
+    return { ready: true, have: true, on, can: !!wanted, names, pending: !!wanted && names.some((k, i) => wants[i] !== serverOn(feats[k])) };
+}
+const isOn = (f) => (isServer(f) ? !!serverOf(f).on : !!settings().enabled[f.id]);
+const usable = (f) => !isServer(f) || !!serverOf(f).can;
+// 서버 기능 켜고 끄기: 서버 화면이 하던 그대로 기능 하나씩 POST(서버 주소는 기능 하나씩 받음). 바뀐 건 서버를 다시 켜야 적용
+async function setServerNames(names, on) {
+    try {
+        for (const name of names) {
+            const res = await fetch('/api/plugins/breeze-server/features', { method: 'POST', headers: ctx().getRequestHeaders(), body: JSON.stringify({ name, on }) });
+            if (!res.ok) throw new Error(String(res.status));
+        }
+    } catch (e) { console.warn('[Breeze] 서버 기능 켜고 끄기', e); toastr.error('서버 플러그인 설정을 바꾸지 못했어요.', 'breeze'); }
+    await askServer(true);
 }
 
-// 목록의 한 줄: 체크칸 · 이름 · (세부 설정이 있으면) ›. 설명까지 두 줄로 두면 기능이 늘수록 목록이 길어져, 설명은 마우스를 올리면 · 세부 설정 화면에서
-// 새로 생긴 기능 NEW: features.js 의 added(그 기능이 들어온 판)가 기준 판보다 높고 아직 안 열어 본 것. 그 줄과 그 묶음 제목에 표시, 세부 화면을 열거나 켜고 끄면 사라짐.
+// 새로 생긴 기능 N: features.js 의 added(그 기능이 들어온 판)가 기준 판보다 높고 아직 안 열어 본 것. 그 줄 · 묶음 줄 · 갈래 버튼에 표시, 세부 화면을 열거나 켜고 끄면 사라짐.
 // 기준 판(newBase)은 처음 한 번 정함: 이미 쓰던 사람은 마지막으로 본 내역 판(seenLog), 처음 설치한 사람은 지금 있는 기능 중 가장 새 판(설치할 때 있던 기능은 NEW 아님)
 const verNum = (v) => String(v || '').split('.').slice(0, 3).reduce((a, n) => a * 1000 + (Number(n) || 0), 0);
 function newBase() {
@@ -275,64 +372,115 @@ function markSeen(id) {
     (settings().seenNew ??= []).push(id);
     save();
 }
-// 목록 한 줄 = 기능 하나 또는 묶음 하나(묶음은 첫 기능 자리에)
-function unitsOf(list) {
+const newBadge = (on) => (on ? '<span class="etk-new-badge" title="새 기능">N</span>' : '');
+const iconHtml = (name) => `<i class="fa-solid fa-${esc(name)} etk-row-icon" aria-hidden="true"></i>`;
+// 오른쪽 작은 동그라미 체크: 보이는 건 18px, 누르는 곳은 둘레 칸 전체(40px 넘게). 안의 체크칸은 투명하게 덮어 눌림을 받음
+const tickHtml = (on, label, disabled) => `<label class="etk-tick"><input type="checkbox" class="etk-check"${on ? ' checked' : ''}${disabled ? ' disabled' : ''} aria-label="${esc(label)}"><span class="etk-tick-mark" aria-hidden="true"></span></label>`;
+const moreHtml = (text, icon) => `<span class="etk-row-more">${esc(text)}<i class="fa-solid fa-chevron-${icon}"></i></span>`;
+
+// 목록 한 줄: 아이콘 · 이름 · 설명 한 줄 · (세부 설정이 있으면) '설정 ›' · 체크
+function rowDesc(f) {
+    if (!isServer(f)) return f.desc;
+    const st = serverOf(f);
+    if (!st.ready) return '서버 플러그인을 확인하고 있어요';
+    if (!st.have) return '서버 플러그인을 넣으면 쓸 수 있어요';
+    return st.pending ? `서버를 다시 켜면 ${st.on ? '켜져요' : '꺼져요'}` : f.desc;
+}
+function rowHtml(f, sub = false) {
+    const on = isOn(f), missing = isServer(f) && serverOf(f).ready && !serverOf(f).have;
+    const cls = ['etk-row', on ? '' : 'etk-row-off', sub ? 'etk-row-sub' : '', missing ? 'etk-row-missing' : '', wide() && ui.view === f.id ? 'etk-row-current' : ''].filter(Boolean).join(' ');
+    const tail = hasMore(f) ? moreHtml(f.hasOptions || f.hasAction ? '설정' : '자세히', 'right') : '';
+    return `<div class="${cls}" data-id="${esc(f.id)}" tabindex="0">${iconHtml(f.icon)}
+        <div class="etk-row-text"><div class="etk-row-name">${esc(f.name)}${newBadge(isNewFeature(f))}</div><div class="etk-row-desc">${esc(rowDesc(f))}</div></div>
+        ${pillHtml(f.id)}${tail}${tickHtml(on, f.name, !usable(f))}</div>`;
+}
+const bundleMembers = (name) => ALL.filter(x => x.bundle === name);
+// 묶음이 켜짐 = 켜고 끌 수 있는 안쪽 기능이 전부 켜짐
+const bundleOn = (members) => { const can = members.filter(usable); return can.length > 0 && can.every(isOn); };
+function bundleRowHtml(name, open) {
+    const b = BUNDLES[name], members = bundleMembers(name), on = bundleOn(members), part = !on && members.some(isOn);
+    return `<div class="etk-row etk-bundle${on ? '' : ' etk-row-off'}${open ? ' etk-opened' : ''}" data-bundle="${esc(name)}" tabindex="0" aria-expanded="${open}">${iconHtml(b.icon)}
+        <div class="etk-row-text"><div class="etk-row-name">${esc(name)}${newBadge(members.some(isNewFeature))}${part ? '<small class="etk-row-part">일부만 켜짐</small>' : ''}</div><div class="etk-row-desc">${esc(b.desc)}</div></div>
+        ${members.map(m => pillHtml(m.id)).find(Boolean) || ''}${moreHtml(`${members.length}개`, open ? 'up' : 'down')}${tickHtml(on, name, !members.some(usable))}</div>`;
+}
+// 묶음 덩어리: 묶음 줄 + (펼쳤으면) 안쪽 줄. shown = 찾는 중에 맞은 안쪽 기능만 보일 때
+function bundleHtml(name, open, shown) {
+    const inner = open ? `<div class="etk-inner">${(shown || bundleMembers(name)).map(m => rowHtml(m, true)).join('')}</div>` : '';
+    return `<div class="etk-unit" data-unit="${esc(name)}">${bundleRowHtml(name, open)}${inner}</div>`;
+}
+// 한 갈래의 줄들(묶음은 첫 기능 자리에). 찾는 중이면 맞는 것만, 안쪽 기능만 맞은 묶음은 펼쳐서 그것만
+const hit = (text, q) => koMatch(text, q);
+function unitsHtml(list, q) {
     const out = [], seen = new Set();
     for (const f of list) {
-        if (!f.bundle) { out.push({ f }); continue; }
+        if (!f.bundle) { if (!q || hit(`${f.name} ${f.desc} ${f.alias || ''}`, q)) out.push(rowHtml(f)); continue; }
         if (seen.has(f.bundle)) continue;
         seen.add(f.bundle);
-        out.push({ bundle: f.bundle, members: list.filter(x => x.bundle === f.bundle) });
+        const b = BUNDLES[f.bundle];
+        if (!q || hit(`${f.bundle} ${b.desc} ${b.alias || ''}`, q)) { out.push(bundleHtml(f.bundle, ui.open.has(f.bundle))); continue; }
+        const found = bundleMembers(f.bundle).filter(m => hit(`${m.name} ${m.desc} ${m.alias || ''}`, q));
+        if (found.length) out.push(bundleHtml(f.bundle, true, found));
     }
-    return out;
+    return out.join('');
 }
-const unitOn = (u) => (u.f ? !!settings().enabled[u.f.id] : u.members.every(m => settings().enabled[m.id]));
-// 묶음도 안에 든 기능에 세부 설정이 있으면 줄을 눌러 세부 설정 화면으로(안에 든 기능마다 켜고 끄기 · 설정이 차례로 보임)
-const bundleAsFeature = (name) => { const members = FEATURES.filter(x => x.bundle === name); return { id: `bundle:${name}`, name, desc: BUNDLES[name] || '', members, hasOptions: members.some(hasMore) }; };
-const viewOf = (id) => FEATURES.find(x => x.id === id) || (typeof id === 'string' && id.startsWith('bundle:') && BUNDLES[id.slice(7)] ? bundleAsFeature(id.slice(7)) : null);
-function bundleRowHtml(u) {
-    const on = unitOn(u), some = u.members.some(m => settings().enabled[m.id]), pill = u.members.map(m => pillHtml(m.id)).find(Boolean) || '';
-    const more = u.members.some(hasMore);
-    return `<div class="etk-row${on ? '' : ' etk-row-off'}${more ? ' etk-has-more' : ''}${wide() && ui.view === `bundle:${u.bundle}` ? ' etk-row-current' : ''}" data-id="bundle:${esc(u.bundle)}" data-bundle="${esc(u.bundle)}" tabindex="0" title="${esc(BUNDLES[u.bundle] || '')}">
-        <input type="checkbox" class="etk-check" ${on ? 'checked' : ''} title="${on ? '누르면 끄기' : '누르면 켜기'}" aria-label="${esc(u.bundle)}">
-        <div class="etk-row-text"><div class="etk-row-name">${esc(u.bundle)}${u.members.some(isNewFeature) ? '<span class="etk-new-badge" title="새 기능">N</span>' : ''}${!on && some ? '<small class="etk-row-part">일부만 켜짐</small>' : ''}</div></div>${pill}
-        ${more ? '<i class="fa-solid fa-chevron-right etk-row-go" title="세부 설정"></i>' : ''}
-    </div>`;
+// 찾는 중이 아니면 고른 갈래만, 찾는 중이면 갈래와 상관없이 전부에서(갈래 이름을 머리로)
+function listHtml() {
+    const q = ui.query.trim();
+    if (!q) return unitsHtml(ALL.filter(f => f.group === ui.tab), '');
+    const parts = GROUPS.map((g) => {
+        const html = unitsHtml(ALL.filter(f => f.group === g.name), q);
+        return html && `<div class="etk-find-group">${iconHtml(g.icon)}${esc(g.name)}</div>${html}`;
+    }).join('');
+    return parts || '<div class="etk-empty">맞는 기능이 없어요</div>';
 }
-function rowHtml(f) {
-    const on = !!settings().enabled[f.id];
-    return `<div class="etk-row${on ? '' : ' etk-row-off'}${hasMore(f) ? ' etk-has-more' : ''}${wide() && ui.view === f.id ? ' etk-row-current' : ''}" data-id="${f.id}" tabindex="0"${f.desc ? ` title="${esc(f.desc)}"` : ''}>
-        <input type="checkbox" class="etk-check" ${on ? 'checked' : ''} title="${on ? '누르면 끄기' : '누르면 켜기'}" aria-label="${esc(f.name)}">
-        <div class="etk-row-text"><div class="etk-row-name">${esc(f.name)}${isNewFeature(f) ? '<span class="etk-new-badge" title="새 기능">N</span>' : ''}${quick().includes(f.id) ? '<i class="fa-solid fa-star etk-row-star" title="확장 설정 목록의 breeze 칸에 꺼내 둠"></i>' : ''}</div></div>${pillHtml(f.id)}
-        ${hasMore(f) ? '<i class="fa-solid fa-chevron-right etk-row-go" title="세부 설정"></i>' : ''}
-    </div>`;
+function tabsHtml() {
+    const q = ui.query.trim();
+    return GROUPS.map(g => `<div class="etk-tab interactable${!q && g.name === ui.tab ? ' etk-on' : ''}" role="tab" tabindex="0" data-tab="${esc(g.name)}" aria-selected="${!q && g.name === ui.tab}">
+        ${iconHtml(g.icon)}<span>${esc(g.name)}${newBadge(ALL.some(f => f.group === g.name && isNewFeature(f)))}</span></div>`).join('');
 }
 function renderList(body) {
-    const q = ui.query.trim().toLowerCase();
-    const show = (f) => !q || koMatch(`${f.name} ${f.desc} ${f.bundle ? `${f.bundle} ${BUNDLES[f.bundle] || ''}` : ''}`, q);
     const paused = settings().paused;
-    const note = paused?.length ? `<div class="etk-paused-note">breeze 기능 ${paused.length}개를 잠시 꺼 뒀어요.</div>` : '';
-    const html = GROUPS.map(g => {
-        const all = FEATURES.filter(f => f.group === g), items = all.filter(show);
-        if (!items.length) return '';
-        const full = onCount(g) === all.length, folded = !q && ui.fold.has(g);
-        // 묶음 제목을 누르면 접고 펼침(접은 묶음은 기억). 찾는 중에는 접은 묶음 안까지 보임
-        return `<div class="etk-group"><div class="etk-section interactable${folded ? ' etk-folded' : ''}" data-fold="${esc(g)}" tabindex="0"><i class="fa-solid fa-chevron-down etk-fold-icon"></i><span>${esc(g)}</span>${all.some(isNewFeature) ? '<span class="etk-new-badge" title="새로 생긴 기능이 있어요">N</span>' : ''}${q ? '' : `<span class="etk-sum-all interactable" data-group="${esc(g)}" data-on="${full ? 0 : 1}" tabindex="0">${full ? '모두 끄기' : '모두 켜기'}</span>`}<small>${unitsOf(all).filter(unitOn).length} / ${unitsOf(all).length}</small><small class="etk-sec-rest">${restCount(g) ? `쉬는 중 ${restCount(g)}` : ''}</small></div>${folded ? '' : unitsOf(items).map(u => (u.f ? rowHtml(u.f) : bundleRowHtml(u))).join('')}</div>`;
-    }).join('');
+    const note = paused?.length ? `<div class="etk-paused-note">breeze 기능 ${paused.length}개를 잠시 꺼 뒀어요. 서버 플러그인 기능은 새로고침해야 꺼져요.</div>` : '';
     // 안쪽 칸: 두 단은 높이가 정해지지 않은 칸에서만 위아래로 고르게 나뉨(굴리는 칸에 바로 걸면 옆으로 단이 계속 생겼음)
-    body.innerHTML = note + (html ? `<div class="etk-list-cols">${html}</div>` : '<div class="etk-empty">맞는 기능이 없어요</div>');
+    body.innerHTML = `${note}<div class="etk-list-cols">${listHtml()}</div>`;
+    dialog().querySelector('.etk-tabs').innerHTML = tabsHtml();
 }
+// 목록이 그려진 칸(두 칸이면 왼쪽, 한 칸이면 목록 화면일 때만)
+function listBox() {
+    const root = dialog();
+    if (!root) return null;
+    return root.querySelector('.etk-pane-list') || (!ui.view ? root.querySelector('.etk-main') : null);
+}
+// 목록만 다시 그림(창 머리 · 오른쪽 칸은 그대로), 보던 자리 유지
+function rerenderList() {
+    const box = listBox();
+    if (!box) return;
+    const top = box.scrollTop;
+    renderList(box);
+    box.scrollTop = top;
+}
+function pickTab(name) {
+    ui.tab = name; ui.query = ''; ui.scroll = 0;
+    const input = dialog()?.querySelector('.etk-search input');
+    if (input) input.value = '';
+    const box = listBox();
+    if (box) { renderList(box); box.scrollTop = 0; }
+    rememberUi();
+}
+function toggleBundle(name) {
+    if (ui.open.has(name)) ui.open.delete(name);
+    else { ui.open.add(name); for (const m of bundleMembers(name)) markSeen(m.id); }
+    rerenderList();
+}
+// 서버 화면의 줄에서: 그 기능이 있는 갈래로(묶음이면 펼쳐서)
+function jumpTo(group, bundle) {
+    ui.tab = group; ui.query = ''; ui.scroll = 0;
+    if (bundle) ui.open.add(bundle);
+    go(null);
+}
+
 function renderDetail(body, f) {
-    if (f.members) {   // 묶음: 설명 한 줄 + 안에 든 기능마다 이름 · 켜고 끄기 · 설정
-        // 쉬고 있는 기능을 맨 위로: 이유가 아래쪽에 있으면 굴려야 보여서 '일부 쉼'을 누르고도 못 찾았음
-        body.innerHTML = `${f.desc ? `<div class="etk-detail-desc etk-bundle-desc">${esc(f.desc)}</div>` : ''}${[...f.members].sort((x, y) => !!shownState(y.id) - !!shownState(x.id)).map(m => { const on = !!settings().enabled[m.id]; return `<div class="etk-detail etk-bundle-part" data-id="${m.id}">
-        <label class="etk-detail-on"><input type="checkbox" class="etk-check" ${on ? 'checked' : ''} aria-label="${esc(m.name)}"><span>${esc(m.name)}</span></label>
-        ${m.desc ? `<div class="etk-detail-desc">${esc(m.desc)}</div>` : ''}${stateHtml(m.id)}
-        ${m.hasOptions ? (on ? `<div class="etk-options" data-options="${m.id}" data-title="${esc(m.name)}"></div>` : '<div class="etk-empty-line">켜면 세부 설정을 바꿀 수 있어요</div>') : ''}
-    </div>`; }).join('')}`;
-        for (const m of f.members) if (m.hasOptions && settings().enabled[m.id]) renderOptions(m.id);
-        return;
-    }
+    if (isServer(f)) return renderServerDetail(body, f);
     const on = !!settings().enabled[f.id];
     body.innerHTML = `<div class="etk-detail" data-id="${f.id}">
         <label class="etk-detail-on"><input type="checkbox" class="etk-check" ${on ? 'checked' : ''} aria-label="${esc(f.name)}"><span>${on ? '켜짐' : '꺼짐'}</span></label>
@@ -341,16 +489,57 @@ function renderDetail(body, f) {
     </div>`;
     if (on && f.hasOptions) renderOptions(f.id);
 }
-// 아래 줄(목록에서만): 전부 잠시 끄기 · 모두 켜기 · 내보내기 · 불러오기 · 서버 플러그인
-function footHtml() {
-    const paused = settings().paused?.length;
-    return `${paused ? '<div class="menu_button etk-pause-btn"><i class="fa-solid fa-play"></i>다시 켜기</div>' : '<div class="menu_button etk-pause-btn" title="문제가 breeze 때문인지 볼 때 써요"><i class="fa-solid fa-pause"></i>전부 잠시 끄기</div>'}
-        ${!paused && onCount() < FEATURES.length ? '<div class="menu_button etk-all-on"><i class="fa-solid fa-check-double"></i>모두 켜기</div>' : ''}
-        <span class="etk-foot-gap"></span>
-        <i class="fa-solid fa-file-export etk-all-export interactable" tabindex="0" title="설정 내보내기(켜 둔 기능 · 기능마다 고른 설정 전부)"></i>
-        <i class="fa-solid fa-file-import etk-all-import interactable" tabindex="0" title="설정 불러오기"></i>
-        <span class="etk-foot-server interactable${serverNew ? ' etk-has-new' : ''}" tabindex="0" title="${serverNew ? esc(serverNewWhy) : '서버 플러그인'}">서버 <span class="etk-server-count">${esc(serverCount)}</span></span>`;
+// 서버 기능의 세부 설정(지금은 브라우저 탭 그림만): 켜고 끄기 + 그림 고르기 칸. 그림은 서버 쪽 기능이 켜져 돌 때만 바꿀 수 있음
+function renderServerDetail(body, f) {
+    const st = serverOf(f), on = !!st.on, running = serverData?.features?.tab_icon === 'on';
+    const tools = f.id !== 'srv:tab_icon' ? '' : running ? tabIconHtml() : '<div class="etk-empty-line">켜고 실리태번 서버를 다시 켜면 그림을 고를 수 있어요</div>';
+    body.innerHTML = `<div class="etk-detail" data-id="${esc(f.id)}">
+        <label class="etk-detail-on"><input type="checkbox" class="etk-check" ${on ? 'checked' : ''}${st.can ? '' : ' disabled'} aria-label="${esc(f.name)}"><span>${on ? '켜짐' : '꺼짐'}</span></label>
+        <div class="etk-detail-desc">${esc(f.desc)}</div>${st.pending ? `<div class="etk-detail-desc etk-server-pending">서버를 다시 켜면 ${on ? '켜져요' : '꺼져요'}</div>` : ''}${tools}
+    </div>`;
+    wireTabIcon(body);
 }
+
+// … 버튼 목록: 전부 잠시 끄기(또는 다시 켜기) · 모두 켜기 · 서버 플러그인 · 업데이트 내역
+function serverMenuNote() {
+    if (serverData === undefined) return '';
+    if (!serverData) return '설치하는 법';
+    const { restart, newer } = serverNews(serverData);
+    if (restart) return '서버를 다시 켜야 바뀐 게 적용돼요';
+    if (newer) return '새 버전이 있어요';
+    return serverData.paused ? '잠시 꺼 뒀어요' : '작동 중';
+}
+function menuHtml() {
+    const paused = settings().paused?.length;
+    const items = [
+        paused ? { act: 'pause', icon: 'play', name: '다시 켜기' } : { act: 'pause', icon: 'pause', name: '전부 잠시 끄기', note: '문제가 breeze 때문인지 볼 때' },
+        !paused && onCount() < FEATURES.length && { act: 'all-on', icon: 'check-double', name: '모두 켜기' },
+        { act: 'server', icon: 'server', name: '서버 플러그인', note: serverMenuNote(), isNew: serverNew },
+        { act: 'log', icon: 'clock-rotate-left', name: '업데이트 내역' },
+    ].filter(Boolean);
+    return items.map(x => `<div class="etk-menu-item interactable" role="menuitem" tabindex="0" data-act="${x.act}"><i class="fa-solid fa-${x.icon}"></i>
+        <span class="etk-menu-text"><span>${esc(x.name)}${newBadge(x.isNew)}</span>${x.note ? `<small>${esc(x.note)}</small>` : ''}</span></div>`).join('');
+}
+function toggleMenu() {
+    const menu = dialog()?.querySelector('.etk-menu');
+    if (!menu) return;
+    if (!menu.hidden) return closeMenu();
+    menu.innerHTML = menuHtml();
+    menu.style.top = `${dialog().querySelector('.etk-top').offsetHeight - 4}px`;
+    menu.hidden = false;
+}
+function closeMenu() {
+    const menu = dialog()?.querySelector('.etk-menu');
+    if (menu) menu.hidden = true;
+}
+async function menuAction(act) {
+    closeMenu();
+    if (act === 'pause') return togglePause();
+    if (act === 'all-on') { for (const f of FEATURES) if (!settings().enabled[f.id]) await setEnabled(f.id, true); return renderDialog(); }
+    if (act === 'server') return go(SERVER_TAB);
+    if (act === 'log') return showChangelog();
+}
+
 function renderDialog({ keepList = false } = {}) {
     const root = dialog();
     if (!root) return;
@@ -361,110 +550,56 @@ function renderDialog({ keepList = false } = {}) {
     root.classList.toggle('etk-in-detail', !!ui.view && !two);
     root.classList.toggle('etk-two', two);
     placeWindow();
+    const input = root.querySelector('.etk-search input');
+    if (input.value !== ui.query) input.value = ui.query;
     // 두 칸: 왼쪽 목록(보던 자리 그대로) · 오른쪽 세부 설정(맨 위에 이름 · 도구 · 닫기)
     let body = main, list = null;
     if (two) {
-        if (!main.querySelector(':scope > .etk-pane-list')) main.innerHTML = '<div class="etk-pane-list"></div><div class="etk-pane-detail"><div class="etk-pane-head"><b class="etk-pane-title"></b><div class="etk-top-tools"></div><div class="etk-pane-close fa-solid fa-xmark interactable" tabindex="0" title="세부 설정 닫기"></div></div><div class="etk-pane-body"></div></div>';
+        if (!main.querySelector(':scope > .etk-pane-list')) main.innerHTML = '<div class="etk-pane-list"></div><div class="etk-split"></div><div class="etk-pane-detail"><div class="etk-pane-head"><b class="etk-pane-title"></b><div class="etk-top-tools"></div><div class="etk-pane-close fa-solid fa-xmark interactable" tabindex="0" title="오른쪽 칸 닫기"></div></div><div class="etk-pane-body"></div></div>';
         list = main.querySelector('.etk-pane-list'); body = main.querySelector('.etk-pane-body');
+        applySplit(main);
         main.querySelector('.etk-pane-title').textContent = ui.view === SERVER_TAB ? SERVER_TAB : f?.name || '';
     } else if (main.querySelector(':scope > .etk-pane-list')) main.innerHTML = '';
     root.querySelector('.etk-title').textContent = ui.view === SERVER_TAB ? SERVER_TAB : f?.name || '';
     root.querySelector('.etk-top > .etk-top-tools').innerHTML = '';
     const tools = (two ? main : root).querySelector(two ? '.etk-pane-head .etk-top-tools' : '.etk-top > .etk-top-tools');
-    tools.innerHTML = f && !f.members ? `${f.hasAction ? `<div class="menu_button etk-run"${settings().enabled[f.id] ? '' : ' disabled'} title="${settings().enabled[f.id] ? '지금 실행' : '켜면 실행 가능'}"><i class="fa-solid fa-play"></i>실행</div>` : ''}<div class="etk-tool etk-star fa-star ${quick().includes(f.id) ? 'fa-solid etk-on' : 'fa-regular'}" tabindex="0" title="확장 설정 목록의 breeze 칸에 꺼내 두기"></div>` : '';
-    askServerCount();
+    tools.innerHTML = f && !isServer(f) ? `${f.hasAction ? `<div class="menu_button etk-run"${settings().enabled[f.id] ? '' : ' disabled'} title="${settings().enabled[f.id] ? '지금 실행' : '켜면 실행 가능'}"><i class="fa-solid fa-play"></i>실행</div>` : ''}<div class="etk-tool etk-star fa-star ${quick().includes(f.id) ? 'fa-solid etk-on' : 'fa-regular'}" tabindex="0" title="확장 설정 목록의 breeze 칸에 꺼내 두기"></div>` : '';
+    root.querySelector('.etk-more').classList.toggle('etk-has-new', serverNew);
     // 두 칸에서 다른 기능만 고른 거면 왼쪽 목록은 다시 그리지 않고 고른 줄 표시만 옮김(목록을 통째로 다시 그려 바꿀 때마다 더 걸렸음)
     if (list && keepList && list.firstElementChild) list.querySelectorAll('.etk-row').forEach(r => r.classList.toggle('etk-row-current', r.dataset.id === ui.view));
     else if (list) { renderList(list); list.scrollTop = ui.scroll; }
     if (!ui.view) { renderList(body); body.scrollTop = ui.scroll; }
-    else if (ui.view === SERVER_TAB) { body.innerHTML = '<div class="etk-server">확인 중…</div>'; body.scrollTop = 0; showServerStatus(); }
-    else if (list) {
-        // 두 칸 오른쪽: 굴림 자리를 0 으로 쓰면 그 자리에서 화면 전체 계산을 한 번 치러서(12~19ms), 새 칸으로 바꿔 끼움(새 칸은 처음부터 맨 위)
+    else if (ui.view === SERVER_TAB) {
+        const fresh = body.cloneNode(false);
+        fresh.innerHTML = '<div class="etk-server">확인하고 있어요</div>';
+        body.replaceWith(fresh);
+        showServerStatus();
+    } else {
+        // 굴림 자리를 0 으로 쓰면 그 자리에서 화면 전체 계산을 한 번 치러서(12~19ms), 새 칸으로 바꿔 끼움(새 칸은 처음부터 맨 위)
         const fresh = body.cloneNode(false); body.replaceWith(fresh); renderDetail(fresh, f);
-    } else { renderDetail(body, f); body.scrollTop = 0; }
-    if (!keepList) root.querySelector('.etk-foot').innerHTML = ui.view && !two ? '' : footHtml();   // 두 칸에서 기능만 바꿀 땐 아래 줄도 그대로
-    root.querySelector('.etk-hint').hidden = true;
+    }
     rememberUi();
-}
-// 창 아래 설명 줄(손가락 기기): 고른 줄 표시 · 설명 글. 목록 · 세부 설정 화면을 바꾸면 내림
-function showHint(f) {
-    const root = dialog();
-    if (!root) return;
-    root.querySelectorAll('.etk-row-picked').forEach(r => r.classList.remove('etk-row-picked'));
-    const hint = root.querySelector('.etk-hint');
-    if (!f) { hint.hidden = true; return; }
-    root.querySelector(`.etk-row[data-id="${f.id}"]`)?.classList.add('etk-row-picked');
-    // 쉬고 있으면 왜인지 한 줄(자세한 건 › 로)
-    const st = stateOf(f);
-    hint.innerHTML = `<b>${esc(f.name)}</b><span>${esc(f.desc || '')}</span>${st ? `<span class="etk-hint-state">${esc(STATE_HEAD[st])} › 를 누르면 자세히 볼 수 있어요.</span>` : ''}`;
-    hint.hidden = false;
 }
 let listScrolled = null;
 function takeListScroll() { if (listScrolled) { if (listScrolled.isConnected) ui.scroll = listScrolled.scrollTop; listScrolled = null; } }
 function go(view) {
-    if (view && view !== SERVER_TAB) for (const m of viewOf(view)?.members || [{ id: view }]) markSeen(m.id);
-    const inPlace = view === SERVER_TAB && twoPane() && !ui.view;
+    if (view) markSeen(view);
     const body = dialog()?.querySelector('.etk-main');
     if (!ui.view && body) ui.scroll = body.scrollTop;   // 목록에서 떠날 때 보던 자리(두 칸일 땐 왼쪽 목록을 굴릴 때마다 적어 둠)
     const keep = wide() && !!view;   // 두 칸 그대로 오른쪽만 바뀜
-    ui.view = view; ui.inPlace = inPlace;
+    ui.view = view;
     renderDialog({ keepList: keep && wide() });
 }
 
-// 전체 설정 내보내기 · 불러오기. 그림 · 글꼴 같은 사용자 파일은 파일 안에 함께 넣고,
-// 테마 전용 스크립트가 켜는 태번 헬퍼 스크립트도 내용째 넣어 다른 컴퓨터에서도 그대로 돌게 함
-function linkedHelperScripts() {
-    const th = window.TavernHelper;
-    const ids = new Set((settings().options.theme_scripts?.rules || []).flatMap(r => (r.th || []).map(x => x.id)));
-    if (!th?.getScriptTrees || !ids.size) return [];
-    let trees = []; try { trees = th.getScriptTrees({ type: 'global' }) || []; } catch { return []; }
-    return trees.flatMap(t => t.type === 'folder' ? t.scripts || [] : [t]).filter(x => ids.has(x.id)).map(({ name, content, info, button, data }) => ({ name, content, info, button, data }));
-}
-async function exportAll() {
-    const s = settings();
-    const data = await embedFiles({ kind: 'breeze-settings', enabled: s.enabled, options: s.options, quick: s.quick || [], helperScripts: linkedHelperScripts() });
-    downloadText('breeze-settings.json', JSON.stringify(data, null, 1));
-}
-async function importAll() {
-    const file = await pickFile('.json,application/json');
-    if (!file) return;
-    let data = null;
-    try { data = JSON.parse(await file.text()); } catch { /* 아래에서 알림 */ }
-    if (data?.kind !== 'breeze-settings' || typeof data.enabled !== 'object') return toastr.warning('breeze 설정 파일이 아니에요.', 'breeze');
-    const c = ctx();
-    const on = FEATURES.filter(f => data.enabled[f.id]).length;
-    const r = await c.callGenericPopup(`<h3>breeze 설정을 불러올까요?</h3>지금 설정이 파일의 것으로 바뀌어요(켜는 기능 ${on}개).`, c.POPUP_TYPE.CONFIRM, '', { okButton: '불러오기', cancelButton: '취소' });
-    if (r !== c.POPUP_RESULT.AFFIRMATIVE) return;
-    try { data = await restoreFiles(data); } catch (e) { console.error('[Breeze] 설정 파일 올리기', e); return toastr.error('그림 · 글꼴 파일을 올리지 못했어요.', 'breeze'); }
-    // 테마 전용 스크립트가 켜는 태번 헬퍼 스크립트: 같은 이름이 없으면 꺼진 채로 만듦(규칙은 이름으로 다시 찾음)
-    const th = window.TavernHelper;
-    if (th?.updateScriptTreesWith && Array.isArray(data.helperScripts) && data.helperScripts.length) {
-        let have = new Set();
-        try { have = new Set((th.getScriptTrees({ type: 'global' }) || []).flatMap(t => t.type === 'folder' ? t.scripts || [] : [t]).map(x => x.name)); } catch { /* 없음 */ }
-        const add = data.helperScripts.filter(x => x?.name && !have.has(x.name)).map(x => ({ type: 'script', enabled: false, name: x.name, id: crypto.randomUUID(), content: String(x.content || ''), info: String(x.info || ''), button: x.button || { enabled: true, buttons: [] }, data: x.data || {}, export_with: { data: true, button: true } }));
-        if (add.length) { try { await th.updateScriptTreesWith(t => [...t, ...add], { type: 'global' }); } catch (e) { console.warn('[Breeze] 태번 헬퍼 스크립트 만들기', e); } }
-    }
-    // 켜진 기능은 껐다가 새 설정으로 다시 켬(끌 수 없는 기능은 새로고침해야 새 설정이 먹음)
-    let reload = 0;
-    for (const f of FEATURES) if (running.has(f.id) && !(await stopFeature(f.id))) reload++;
-    const s = settings();
-    s.enabled = Object.fromEntries(FEATURES.map(f => [f.id, !!data.enabled[f.id]]));
-    s.options = data.options && typeof data.options === 'object' ? data.options : {};
-    // 규칙에 적힌 스크립트 id 는 내보낸 컴퓨터의 것 — 이름으로 이 컴퓨터의 id 를 찾아 바꿔 둠(안 바꾸면 규칙을 고칠 때 같은 스크립트를 하나 더 만듦)
+// 서버 플러그인도 잠시 끄기 · 다시 켜기. 플러그인이 없거나 이 주소를 모르는 옛 판이면 false(안내하지 않음)
+async function pauseServer(on) {
     try {
-        const now = new Map((th?.getScriptTrees?.({ type: 'global' }) || []).flatMap(t => t.type === 'folder' ? t.scripts || [] : [t]).map(x => [x.name, x.id]));
-        for (const r of s.options.theme_scripts?.rules || []) {
-            const own = (r.th || []).find(x => x.id === r.thOwn);
-            for (const ref of r.th || []) if (now.has(ref.name)) ref.id = now.get(ref.name);
-            if (own) r.thOwn = own.id;
-        }
-    } catch { /* 이름으로 다시 찾음 */ }
-    s.quick = Array.isArray(data.quick) ? data.quick.filter(id => FEATURES.some(f => f.id === id)) : [];
-    delete s.paused;
-    save();
-    for (const f of FEATURES) if (s.enabled[f.id]) await startFeature(f.id);
-    renderDialog(); refreshLauncher();
-    toastr.success(reload ? `불러왔어요. ${reload}개는 새로고침해야 새 설정이 먹어요.` : '불러왔어요.', 'breeze');
+        const res = await fetch('/api/plugins/breeze-server/pause', { method: 'POST', headers: ctx().getRequestHeaders(), body: JSON.stringify({ on }) });
+        if (!res.ok) return false;
+        const d = await res.json();
+        setServer(d?.features ? d : serverData);
+        return true;
+    } catch { return false; }
 }
 
 async function togglePause() {
@@ -473,13 +608,15 @@ async function togglePause() {
         const ids = s.paused;
         delete s.paused; save();
         for (const id of ids) await setEnabled(id, true);
+        if (await pauseServer(false)) toastr.info('서버 플러그인 기능은 새로고침하면 다시 켜져요. 나머지는 바로 켜졌어요.', 'breeze');
     } else {
         const ids = FEATURES.filter(f => s.enabled[f.id]).map(f => f.id);
         if (!ids.length) return;
         s.paused = ids; save();
         let reload = 0;
         for (const id of ids) if (!(await setEnabled(id, false))) reload++;
-        if (reload) toastr.info(`${reload}개는 새로고침해야 완전히 꺼져요.`, 'breeze');
+        const server = await pauseServer(true);
+        if (reload || server) toastr.info([server ? '서버 플러그인 기능은 새로고침해야 꺼져요.' : '', reload ? `${reload}개도 새로고침해야 완전히 꺼져요.` : '', '나머지는 새로고침 없이 바로 꺼졌어요.'].filter(Boolean).join(' '), 'breeze', { timeOut: 9000 });
     }
     renderDialog();
 }
@@ -490,7 +627,7 @@ function renderOptions(id) {
     if (!box) return;
     box.replaceChildren();
     const mod = running.get(id);
-    if (mod?.options && settings().enabled[id]) mod.options(box, makeApi(id));
+    if (mod?.options && settings().enabled[id]) { mod.options(box, makeApi(id)); addWandCheck(box, id); }
 }
 
 async function setEnabled(id, on) {
@@ -499,10 +636,71 @@ async function setEnabled(id, on) {
     save();
     let stopped = true;
     if (on) await startFeature(id);
-    else stopped = await stopFeature(id);   // 열어 둔 세부 설정은 끄기 전에 접혀 있음(change 처리에서), 열어 둔 표시는 남김
+    else stopped = await stopFeature(id);
     renderDialog();
     refreshLauncher();
+    syncWand();
     return stopped;
+}
+// 묶음 체크: 안의 것을 전부 같은 쪽으로(서버 기능은 켜고 끌 수 있을 때만)
+async function setBundle(name, on) {
+    const members = bundleMembers(name).filter(usable);
+    let needsReload = false;
+    for (const f of members.filter(m => !isServer(m))) if (isOn(f) !== on && !(await setEnabled(f.id, on))) needsReload = true;
+    const srv = members.filter(m => isServer(m) && isOn(m) !== on);
+    if (srv.length) await setServerNames(srv.flatMap(m => serverOf(m).names), on);
+    if (needsReload) toastr.info(`‘${name}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
+    renderDialog();   // 바뀐 기능이 없었어도 줄 모양(체크 · '일부만 켜짐')을 지금 상태로
+}
+async function onCheck(box) {
+    const holder = box.closest('.etk-row, .etk-detail');
+    if (holder?.dataset.bundle) return setBundle(holder.dataset.bundle, box.checked);
+    const f = viewOf(holder?.dataset.id);
+    if (!f) return;
+    if (isServer(f)) { await setServerNames(serverOf(f).names, box.checked); return renderDialog(); }
+    if (!(await setEnabled(f.id, box.checked))) toastr.info(`‘${f.name}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
+}
+// 목록 줄을 눌렀을 때: 체크는 켜고 끄기(change 에서), 묶음은 펼치기, 세부 설정이 있으면 그 화면, 없으면 켜고 끄기.
+// 서버 플러그인이 없어 못 쓰는 줄은 어디를 눌러도 서버 플러그인 화면(넣는 법)
+function onRowClick(row, target) {
+    const f = viewOf(row.dataset.id);
+    if (row.classList.contains('etk-row-missing')) return go(SERVER_TAB);
+    if (target.closest('.etk-tick')) return;
+    if (row.dataset.bundle) return toggleBundle(row.dataset.bundle);
+    if (!f) return;
+    // 세부 설정은 '설정 ›' 을 눌렀을 때만 연다: 줄 아무 데나 눌러도 넘어가면 이름을 읽다가 잘못 들어가게 된다. 줄의 나머지는 눌러도 그대로
+    // 두 칸일 때 이미 오른쪽에 열린 기능의 '설정 ›' 을 다시 누르면 오른쪽을 닫음
+    if (hasMore(f)) { if (target.closest('.etk-row-more')) go(wide() && ui.view === f.id ? null : f.id); return; }
+    const box = row.querySelector('.etk-check');
+    if (!box.disabled) box.click();
+}
+function onStar(star) {
+    const f = FEATURES.find(x => x.id === ui.view);
+    if (!f) return;
+    const list = quick(), at = list.indexOf(f.id), pinned = at < 0;
+    pinned ? list.push(f.id) : list.splice(at, 1);
+    star.classList.toggle('fa-solid', pinned); star.classList.toggle('fa-regular', !pinned); star.classList.toggle('etk-on', pinned);
+    save(); refreshLauncher();
+}
+async function onDialogClick(e, close) {
+    const t = e.target;
+    if (!t.closest('.etk-menu, .etk-more')) closeMenu();
+    if (t.closest('.etk-close')) return close();
+    if (t.closest('.etk-back, .etk-pane-close')) return go(null);
+    if (t.closest('.etk-more')) return toggleMenu();
+    const item = t.closest('.etk-menu-item');
+    if (item) return menuAction(item.dataset.act);
+    const tab = t.closest('.etk-tab');
+    if (tab) return pickTab(tab.dataset.tab);
+    const use = t.closest('.etk-use, .etk-part-go');
+    if (use) return use.dataset.fold ? toggleUse(use.dataset.fold) : jumpTo(use.dataset.group, use.dataset.bundleTo);
+    if (t.closest('.etk-use-plain')) return;
+    const star = t.closest('.etk-star');
+    if (star) return onStar(star);
+    const f = FEATURES.find(x => x.id === ui.view);
+    if (f && t.closest('.etk-run')) { if (settings().enabled[f.id]) running.get(f.id)?.open?.(); return; }
+    const row = t.closest('.etk-row');
+    if (row) onRowClick(row, t);
 }
 
 function openDialog() {
@@ -518,19 +716,21 @@ function openDialog() {
             <div class="etk-back fa-solid fa-arrow-left interactable" tabindex="0" title="목록으로"></div>
             <div class="etk-brand">${LOGO}<b class="etk-brand-name">breeze</b></div>
             <b class="etk-title"></b>
-            <div class="etk-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="기능 찾기 (ㅊㅌ, 채팅...)"></div>
+            <div class="etk-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="기능 찾기 (알림음, ㅇㄹ)"></div>
             <div class="etk-top-tools"></div>
+            <div class="etk-more fa-solid fa-ellipsis interactable" tabindex="0" title="더 보기" aria-haspopup="menu"></div>
             <div class="etk-close fa-solid fa-xmark interactable" tabindex="0" title="닫기"></div>
         </div>
+        <div class="etk-tabs" role="tablist"></div>
         <div class="etk-main"></div>
-        <div class="etk-hint" hidden></div>
-        <div class="etk-foot"></div>
+        <div class="etk-menu" role="menu" hidden></div>
         <div class="etk-rz etk-rz-w" data-rz="w"></div><div class="etk-rz etk-rz-e" data-rz="e"></div><div class="etk-rz etk-rz-s" data-rz="s"></div><div class="etk-rz etk-rz-sw" data-rz="sw"></div><div class="etk-rz etk-rz-se" data-rz="se" title="끌어서 창 크기 바꾸기"></div>
     </div>`;
     document.body.append(root);
-    const win = root.querySelector('.etk-window'), main = root.querySelector('.etk-main');
+    const main = root.querySelector('.etk-main');
     placeWindow();
     renderDialog();
+    askServer();
     main.addEventListener('scroll', () => { if (!ui.view) ui.scroll = main.scrollTop; }, { passive: true });
     // 두 칸의 왼쪽 목록 굴림(굴림 신호는 위로 안 올라와서 먼저 받기로)
     //   굴릴 때 바로 읽으면 화면 계산을 그 자리에서 치르는 때가 있어서, 굴렸다는 것만 적고 다음에 그리기 전에 읽음
@@ -539,13 +739,36 @@ function openDialog() {
     let wasTwo = wide();
     const onResize = () => { if (wide() !== wasTwo) { wasTwo = wide(); renderDialog(); } else placeWindow(); };
     const close = () => { takeListScroll(); rememberUi(); root.remove(); document.removeEventListener('keydown', onKey, true); window.removeEventListener('resize', onResize); };
-    const onKey = (e) => { if (e.key === 'Escape' && !e.target.closest?.('.popup') && !document.querySelector('dialog[open]')) { e.stopPropagation(); close(); } };
+    // Esc: … 목록이 열려 있으면 그것만 닫고, 아니면 창을 닫음
+    const onKey = (e) => {
+        if (e.key !== 'Escape' || e.target.closest?.('.popup') || document.querySelector('dialog[open]')) return;
+        e.stopPropagation();
+        const menu = root.querySelector('.etk-menu');
+        if (!menu.hidden) closeMenu(); else close();
+    };
     document.addEventListener('keydown', onKey, true);
     window.addEventListener('resize', onResize);
     // 실리태번은 열린 패널(확장 · 설정 등) 바깥을 누르면 그 패널을 닫는데(html 의 mousedown · touchstart), 이 창은 화면을 덮지 않아
     //   창 안을 누르는 것도 바깥으로 잡혀 열어 둔 패널이 닫혔음 → 창 안에서 누른 건 html 까지 올라가지 않게
     for (const k of ['mousedown', 'touchstart']) root.addEventListener(k, (e) => e.stopPropagation());
-    // 옮기기: PC 는 위 줄을 끌어 창 자리를, 휴대폰은 위 줄(손잡이)을 끌어 창 높이를. 글 입력칸 · 버튼에서 누른 건 빼고
+    wireMove(root);
+    wireResize(root);
+    wireSplit(root);
+    root.querySelector('.etk-search input').addEventListener('input', (e) => { ui.query = e.target.value; ui.scroll = 0; renderDialog(); });
+    root.addEventListener('click', (e) => onDialogClick(e, close));
+    root.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const el = e.target.closest('.etk-row, .etk-tab, .etk-menu-item, .etk-back, .etk-pane-close, .etk-close, .etk-more, .etk-star, .etk-part-go');
+        if (!el || e.target !== el) return;
+        e.preventDefault();
+        // 줄에서 Enter: 세부 설정은 '설정 ›' 을 눌러야만 열리므로, 키보드로는 그 줄의 '설정 ›' 을 대신 누른다(없으면 줄 그대로)
+        (el.classList.contains('etk-row') ? el.querySelector('.etk-row-more') || el : el).click();
+    });
+    root.addEventListener('change', (e) => { if (e.target.classList.contains('etk-check')) onCheck(e.target); });
+}
+// 옮기기: PC 는 위 줄을 끌어 창 자리를, 휴대폰은 위 줄(손잡이)을 끌어 창 높이를. 글 입력칸 · 버튼에서 누른 건 빼고
+function wireMove(root) {
+    const win = root.querySelector('.etk-window');
     root.querySelector('.etk-top').addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || e.target.closest('input, .interactable, .menu_button, .etk-tool')) return;
         e.preventDefault();
@@ -562,7 +785,40 @@ function openDialog() {
         top.addEventListener('pointerup', up, { once: true });
         top.addEventListener('pointercancel', up, { once: true });
     });
-    // 크기 바꾸기(PC): 왼쪽 · 오른쪽 · 아래 가장자리와 아래 두 모서리를 끌어서. 넓히면 목록이 두 단, 크기는 기억
+}
+// 두 칸의 폭 나누기: 끌어 정한 비율이 있으면 그 비율로(없으면 style.css 의 기본). 비율로 두어 창 크기를 바꿔도 그대로 따라가고,
+//   왼쪽 260px, 오른쪽 300px 아래로는 줄지 않게 CSS 가 막음
+const SPLIT_MIN_LEFT = 260, SPLIT_MIN_RIGHT = 300;
+function applySplit(main) {
+    if (ui.split) main.style.setProperty('--etk-split', `clamp(${SPLIT_MIN_LEFT}px, ${(ui.split * 100).toFixed(2)}%, calc(100% - ${SPLIT_MIN_RIGHT}px))`);
+    // 끌어 정한 폭이 없으면 왼쪽 목록은 창이 좁을 때의 폭 그대로: 세부 설정을 열 때 목록이 좁아지며 글이 다시 접히면 창이 넓어지는 것과 겹쳐 덜컥거려 보였다
+    else { const { nw, w } = winWidths(); main.style.setProperty('--etk-split', `${Math.max(SPLIT_MIN_LEFT, Math.min(nw, w - SPLIT_MIN_RIGHT))}px`); }   // 폭을 숫자로 못 박는다: 창 폭에 대한 식이면 창이 넓어지는 동안 목록이 같이 늘었다 줄며 오른쪽 체크가 흔들렸다
+}
+// 가운데 선을 끌어 두 칸 폭 조절, 두 번 누르면 기본으로. 두 칸은 다시 그릴 때마다 새로 만들어져서 창에 한 번만 걸어 둠
+function wireSplit(root) {
+    const win = root.querySelector('.etk-window'), main = root.querySelector('.etk-main');
+    main.addEventListener('pointerdown', (e) => {
+        const bar = e.target.closest?.('.etk-split');
+        if (!bar || e.button !== 0) return;
+        e.preventDefault();
+        bar.setPointerCapture(e.pointerId);
+        win.classList.add('etk-dragging');   // 끄는 동안 글이 선택되지 않게
+        const move = (ev) => {
+            const r = main.getBoundingClientRect();
+            const left = Math.max(SPLIT_MIN_LEFT, Math.min(ev.clientX - r.left, r.width - SPLIT_MIN_RIGHT));
+            ui.split = Math.min(.99, Math.max(.01, left / r.width));
+            applySplit(main);
+        };
+        const up = () => { bar.removeEventListener('pointermove', move); win.classList.remove('etk-dragging'); rememberUi(); };
+        bar.addEventListener('pointermove', move);
+        bar.addEventListener('pointerup', up, { once: true });
+        bar.addEventListener('pointercancel', up, { once: true });
+    });
+    main.addEventListener('dblclick', (e) => { if (!e.target.closest?.('.etk-split')) return; ui.split = null; applySplit(main); rememberUi(); });
+}
+// 크기 바꾸기(PC): 왼쪽 · 오른쪽 · 아래 가장자리와 아래 두 모서리를 끌어서. 넓히면 목록이 두 단, 크기는 기억
+function wireResize(root) {
+    const win = root.querySelector('.etk-window');
     for (const rz of root.querySelectorAll('.etk-rz')) rz.addEventListener('pointerdown', (e) => {
         if (e.button !== 0 || sheet()) return;
         e.preventDefault(); e.stopPropagation();
@@ -583,60 +839,6 @@ function openDialog() {
         rz.addEventListener('pointermove', move);
         rz.addEventListener('pointerup', up, { once: true });
         rz.addEventListener('pointercancel', up, { once: true });
-    });
-    root.querySelector('.etk-search input').addEventListener('input', (e) => { ui.query = e.target.value; ui.scroll = 0; renderDialog(); });
-    root.addEventListener('click', async (e) => {
-        if (e.target.closest('.etk-close')) return close();
-        if (e.target.closest('.etk-back, .etk-pane-close')) return go(null);
-        if (e.target.closest('.etk-pause-btn')) return togglePause();
-        if (e.target.closest('.etk-all-on')) { for (const f of FEATURES) if (!settings().enabled[f.id]) await setEnabled(f.id, true); return renderDialog(); }
-        if (e.target.closest('.etk-all-export')) return exportAll();
-        if (e.target.closest('.etk-all-import')) return importAll();
-        if (e.target.closest('.etk-foot-server')) return go(SERVER_TAB);
-        // 묶음 제목 줄의 '모두 켜기 · 끄기': 처음 설치하면 전부 꺼져 있어서 하나씩 누르지 않게
-        const all = e.target.closest('.etk-sum-all');
-        if (all) { const on = all.dataset.on === '1'; for (const f of FEATURES.filter(x => x.group === all.dataset.group)) if (!!settings().enabled[f.id] !== on) await setEnabled(f.id, on); return renderDialog(); }
-        const fold = e.target.closest('.etk-section[data-fold]');
-        if (fold && !ui.query.trim()) { const g = fold.dataset.fold, body = dialog().querySelector('.etk-main'); ui.scroll = body.scrollTop; ui.fold.has(g) ? ui.fold.delete(g) : ui.fold.add(g); return renderDialog(); }
-        const f = FEATURES.find(x => x.id === ui.view);
-        if (f && e.target.closest('.etk-star')) {
-            const list = quick(), at = list.indexOf(f.id);
-            at >= 0 ? list.splice(at, 1) : list.push(f.id);
-            const star = e.target.closest('.etk-star'), pinned = at < 0;
-            star.classList.toggle('fa-solid', pinned); star.classList.toggle('fa-regular', !pinned); star.classList.toggle('etk-on', pinned);
-            save(); refreshLauncher();
-            return;
-        }
-        if (f && e.target.closest('.etk-run')) { if (settings().enabled[f.id]) running.get(f.id)?.open?.(); return; }
-        // 목록 줄: 체크칸은 켜고 끄기(change 에서), 나머지를 누르면 세부 설정이 있는 기능은 그 화면으로, 없는 기능은 켜고 끄기
-        const row = e.target.closest('.etk-row');
-        if (!row || e.target.closest('.etk-check')) return;
-        const rf = FEATURES.find(x => x.id === row.dataset.id) || (row.dataset.bundle ? bundleAsFeature(row.dataset.bundle) : null);
-        // 손가락 기기는 마우스를 올려 설명을 볼 수 없어서, 줄을 누르면 창 아래 설명 줄에 그 기능 설명을 띄움(목록 길이는 그대로).
-        //   같은 줄을 다시 누르면 내림, 세부 설정은 › 로
-        if (touchOnly() && !e.target.closest('.etk-row-go')) { showHint(row.classList.contains('etk-row-picked') ? null : rf); return; }
-        // 두 칸일 때 이미 오른쪽에 열린 기능을 다시 누르면 오른쪽을 닫음
-        if (hasMore(rf)) go(wide() && ui.view === rf.id ? null : rf.id); else row.querySelector('.etk-check').click();
-    });
-    root.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' && e.key !== ' ') return;
-        const el = e.target.closest('.etk-row, .etk-section[data-fold], .etk-back, .etk-pane-close, .etk-close, .etk-sum-all, .etk-foot-server, .etk-all-export, .etk-all-import, .etk-star');
-        if (!el || e.target !== el) return;
-        e.preventDefault(); el.click();
-    });
-    root.addEventListener('change', async (e) => {
-        if (!e.target.classList.contains('etk-check')) return;
-        const bundle = e.target.closest('[data-bundle]')?.dataset.bundle;
-        if (bundle) {   // 묶음: 안에 든 기능을 전부 같은 쪽으로
-            let needsReload = false;
-            for (const f of FEATURES.filter(x => x.bundle === bundle)) if (!!settings().enabled[f.id] !== e.target.checked && !(await setEnabled(f.id, e.target.checked))) needsReload = true;
-            if (needsReload) toastr.info(`‘${bundle}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
-            renderDialog();   // 바뀐 기능이 없었어도 줄 모양(체크 · '일부만 켜짐')을 지금 상태로
-            return;
-        }
-        const id = e.target.closest('[data-id]')?.dataset.id;
-        if (!id) return;
-        if (!(await setEnabled(id, e.target.checked))) toastr.info(`‘${FEATURES.find(f => f.id === id)?.name}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
     });
 }
 // 창 폭: 목록만 있을 땐 nw(가장자리를 끌어 바꾼 폭 size.w), 세부 설정을 열어 두 칸일 땐 w(size.ww). 화면보다 크면 화면에 맞춤
@@ -662,6 +864,7 @@ function placeWindow(keep) {
         const h = Math.round(Math.min(H * 0.92, Math.max(Math.min(240, H * 0.5), (ui.sheet || 0.62) * H)));
         if (keep) ui.sheet = h / H;
         Object.assign(win.style, { left: '0px', top: `${H - h}px`, width: `${W}px`, height: `${h}px` });
+        win.style.removeProperty('--etk-final-w');
         return;
     }
     // 자리는 좁은 창 기준(ui.pos)으로 기억하고, 두 칸으로 넓힐 땐 창이 화면 오른쪽 반에 있으면 왼쪽으로 · 왼쪽 반이면 오른쪽으로 넓힘
@@ -670,6 +873,8 @@ function placeWindow(keep) {
     const x = Math.max(8, Math.min(w > nw && nx + nw / 2 > W / 2 ? nx + nw - w : nx, W - w - 8));
     if (keep && ui.pos) ui.pos = { x: nx, y };
     Object.assign(win.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${h}px` });
+    // 창 폭이 부드럽게 바뀌는 동안 한 칸 목록이 넓은 창을 따라 늘었다 줄지 않게, 다 바뀐 뒤의 폭을 알려 둔다
+    win.style.setProperty('--etk-final-w', `${w}px`);
 }
 
 // 이름 옆 알약 = 확장 버전(manifest.json) 그대로(1.0.0)
@@ -737,12 +942,13 @@ function foldChangelog(e) {
     }
 }
 
-// 확장 설정 목록에 두는 칸: 다른 확장처럼 접는 줄. 펼치면 ★ 로 꺼내 둔 기능의 스위치가 바로 나오고, 맨 아래에 전체 설정 열기.
+// 확장 설정 목록에 두는 칸: 다른 확장처럼 접는 줄. 펼치면 맨 위에 전체 설정 열기, 그 아래 ★ 로 꺼내 둔 기능의 스위치가 바로 나온다.
 function refreshLauncher() {
     const root = document.getElementById('etk_settings');
     if (!root) return;
     showVersion(root.querySelector('.etk-launch-count'));
     const s = settings();
+    root.querySelector('.etk-wand-self input').checked = inWand(WAND_SELF);
     const rows = quick().map(id => FEATURES.find(f => f.id === id)).filter(Boolean).map(f => {
         const on = !!s.enabled[f.id], open = on && ui.quickOpen.has(f.id);
         return `
@@ -758,7 +964,7 @@ function refreshLauncher() {
     for (const box of root.querySelectorAll('[data-quick-options]')) {
         const id = box.dataset.quickOptions, mod = running.get(id), old = kept.get(id);
         if (old) { box.replaceWith(old); continue; }
-        if (mod?.options) mod.options(box, makeApi(id));
+        if (mod?.options) { mod.options(box, makeApi(id)); addWandCheck(box, id); }
     }
 }
 // 확장 목록의 이름은 테마 글꼴을 따라 굵기 500 으로 그리는데, 글꼴에 500 이 없으면 400 으로 내려가 가늘게 보임.
@@ -789,8 +995,9 @@ function addLauncher() {
                 <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
             </div>
             <div class="inline-drawer-content">
+                <div class="etk-open interactable" tabindex="0" role="button"><span class="etk-open-face"><i class="fa-solid fa-sliders"></i>전체 설정 열기</span></div>
+                <label class="checkbox_label etk-wand-self"><input type="checkbox"><span>마법봉 메뉴에서도 열기</span></label>
                 <div class="etk-quick"></div>
-                <div class="menu_button etk-open"><i class="fa-solid fa-sliders"></i>전체 설정 열기</div>
             </div>
         </div>
     </div>`);
@@ -798,6 +1005,7 @@ function addLauncher() {
     // 한 번 더 누르면 닫힘(창이 떠 있으면 그 창의 닫기를 누른 것과 같게)
     root.querySelector('.etk-open').addEventListener('click', () => { const d = dialog(); if (d) d.querySelector('.etk-close')?.click(); else openDialog(); });
     root.addEventListener('change', async (e) => {
+        if (e.target.closest('.etk-wand-self')) return void toggleWand(WAND_SELF);
         const row = e.target.closest('.etk-quick-row');
         if (!row || e.target.type !== 'checkbox') return;
         if (!(await setEnabled(row.dataset.id, e.target.checked))) toastr.info(`‘${FEATURES.find(f => f.id === row.dataset.id)?.name}’은(는) 새로고침해야 완전히 꺼져요.`, 'breeze');
@@ -823,8 +1031,13 @@ function addLauncher() {
     refreshLauncher();
 }
 
-// 짝 서버 플러그인 상태: 있으면 기능마다 작동 중 · 휴식 · 꺼짐, 없으면 넣는 법
-// 탭 아이콘 칸: 지금 아이콘 보여 주기 · 그림 고르기 · 원래대로
+
+// ───────── 서버 플러그인 화면 ─────────
+// 맨 위 한 줄 = 지금 상태(작동 중 · 새 버전 · 다시 켜야 함 · 없음)와 그때 누를 버튼 하나, 그 아래 '서버 플러그인이 하는 일'(누르면 그 기능이 있는 갈래로).
+// 서버 기능 켜고 끄기는 목록의 줄에서(빨리 열기 묶음 안 · 꾸미기의 브라우저 탭 그림)
+
+// 탭 아이콘 칸(브라우저 탭 그림의 세부 설정): 지금 아이콘 보여 주기 · 그림 고르기 · 원래대로
+const tabIconHtml = () => '<div class="etk-tab-icon-tools"><img class="etk-tab-icon-now" alt="지금 탭 그림"><div class="menu_button etk-tab-icon-pick"><i class="fa-solid fa-image"></i> 그림 고르기</div><div class="menu_button etk-tab-icon-reset" hidden>원래대로</div></div><small class="etk-tab-icon-note">고른 그림은 탭과 홈 화면 아이콘으로 써요. 바뀌기까지 시간이 걸릴 수 있어요.</small>';
 async function wireTabIcon(el) {
     const box = el.querySelector('.etk-tab-icon-tools');
     if (!box) return;
@@ -851,19 +1064,31 @@ const INSTALL_CMD = {
     unix: () => `curl -fsSL ${INSTALL_BASE}install.sh | sh -s ${Number(location.port) || 8000}`,
     win: () => `irm ${INSTALL_BASE}install.ps1 | iex`,
 };
-// 터미널 여는 법(처음 하는 사람용): 고른 기기 칸에 맞춰 보임
+// 터미널 여는 법(처음 하는 사람용): 고른 기기 칸에 맞춰 보임. 첫 줄은 1단계 글, 나머지는 그 아래 작은 글
 const INSTALL_HOW = {
     unix: ['맥: 터미널 앱을 열어요.', '안드로이드: Termux 를 새로 열어요.', '폴더는 어디든 괜찮아요. 실리태번 서버는 켜 둔 채로 해요.'],
     win: ['시작 버튼을 오른쪽 클릭 › ‘터미널’을 눌러요.', '윈도우 10 은 ‘Windows PowerShell’이에요.', '폴더는 어디든 괜찮아요. 실리태번 서버는 켜 둔 채로 해요.'],
 };
-const installBoxHtml = () => `<div class="etk-install"><div class="etk-install-os"><span class="etk-os-tab interactable" tabindex="0" data-os="unix">맥 · 리눅스 · 안드로이드(Termux)</span><span class="etk-os-tab interactable" tabindex="0" data-os="win">윈도우 (PowerShell)</span></div><pre class="etk-install-cmd"></pre><div class="etk-install-foot"><div class="menu_button etk-install-copy"><i class="fa-solid fa-copy"></i> 복사</div></div></div>`;
+// 명령어를 못 쓰는 사람(터미널이 낯설거나 막힌 곳)을 위한 다른 길: 폴더를 손으로 옮기기. 자주 쓰는 길이 아니라 한 줄로 접어 두고 누르면 그 자리에서 펼침
+const FOLDER_HOW = `<details class="etk-fold"><summary>다른 방법: 폴더를 직접 옮기기<i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary>
+    <div class="etk-step"><i>1</i><div>breeze 확장 폴더 안의 <code>server-plugin/breeze-server</code> 폴더를 실리태번 폴더의 <code>plugins</code> 폴더 안에 복사해요.<small>같은 이름의 폴더가 이미 있으면 덮어써요.</small></div></div>
+    <div class="etk-step"><i>2</i><div>실리태번 폴더의 <code>config.yaml</code> 을 메모장으로 열어 <code>enableServerPlugins: false</code> 를 <code>true</code> 로 바꾸고 저장해요.<small>이미 true 면 그대로 둬요.</small></div></div>
+    <div class="etk-step"><i>3</i><div>실리태번 서버를 껐다 켜요.</div></div></details>`;
+const installHtml = () => `<div class="etk-sec-label">넣는 법</div><div class="etk-install">
+    <div class="etk-install-os"><span class="etk-os-tab interactable" tabindex="0" data-os="unix">맥, 리눅스, 안드로이드</span><span class="etk-os-tab interactable" tabindex="0" data-os="win">윈도우</span></div>
+    <div class="etk-step"><i>1</i><div class="etk-install-how"></div></div>
+    <div class="etk-step"><i>2</i><div>아래 한 줄을 붙여 넣고 엔터를 눌러요.<pre class="etk-install-cmd"></pre><div class="etk-sbtn etk-install-copy interactable" tabindex="0"><i class="fa-solid fa-copy"></i>복사</div></div></div>
+    <div class="etk-step"><i>3</i><div>실리태번 서버를 껐다 켜요.</div></div>${FOLDER_HOW}</div>`;
 function wireInstall(el) {
     const pre = el.querySelector('.etk-install-cmd');
     if (!pre) return;
     const how = el.querySelector('.etk-install-how');
-    // 단계 안내가 있는 화면: 기기 고르는 줄을 1단계 위로(1단계 글이 기기마다 달라서)
-    if (how) el.querySelector('.etk-install-steps').before(el.querySelector('.etk-install-os'));
-    const pick = (os) => { pre.textContent = INSTALL_CMD[os](); if (how) how.innerHTML = INSTALL_HOW[os].map(t => `<span>${t}</span>`).join(''); el.querySelectorAll('.etk-os-tab').forEach(t => t.classList.toggle('etk-on', t.dataset.os === os)); };
+    const pick = (os) => {
+        pre.textContent = INSTALL_CMD[os]();
+        const [first, ...rest] = INSTALL_HOW[os];
+        how.innerHTML = `${esc(first)}${rest.map(t => `<small>${esc(t)}</small>`).join('')}`;
+        el.querySelectorAll('.etk-os-tab').forEach(t => t.classList.toggle('etk-on', t.dataset.os === os));
+    };
     el.querySelectorAll('.etk-os-tab').forEach(t => t.addEventListener('click', () => pick(t.dataset.os)));
     // 처음 펼칠 칸: 이 화면을 보는 기기로 짐작. 안드로이드(Termux)도 리눅스 명령이라 같은 칸
     pick(/Win/i.test(navigator.userAgent) && !/Android/i.test(navigator.userAgent) ? 'win' : 'unix');
@@ -875,17 +1100,132 @@ function wireInstall(el) {
     });
 }
 
-// 서버 플러그인 업데이트 칸: 확장을 업데이트해도 plugins 폴더의 사본은 그대로라 여기서 바꿔 넣음(사용자가 누를 때 · 또는 자동 업데이트)
 // 버전은 breeze 와 같은 꼴(1.2.0). 예전 플러그인은 숫자(3 · 4)라 '예전 버전'으로 보이고 늘 더 낮게 견줘짐
 const pv = (v) => (typeof v === 'number' ? v : verNum(v));
 const pvText = (v) => (typeof v === 'string' && v.includes('.') ? v : '예전 버전');
 const newPlugin = (d) => !!d && (!d.plugin || pv(d.available) > Math.max(pv(d.plugin), pv(d.updated || 0)));
-function updateHtml(d) {
-    if (!d.plugin) return `<div class="etk-card etk-update"><div class="etk-card-name">서버 플러그인 업데이트</div><div class="etk-card-desc">지금 플러그인은 업데이트 기능이 없는 예전 버전이에요. 이번 한 번만 아래 명령으로 다시 넣고 실리태번 서버를 다시 켜 주세요. 그다음부터는 여기서 버튼으로 업데이트해요.</div>${installBoxHtml()}</div>`;
-    const line = d.updated ? `새 버전(${esc(pvText(d.updated))})으로 바꿔 두었어요. 실리태번 서버를 다시 켜면 적용돼요.` : pv(d.available) > pv(d.plugin) ? `새 버전이 있어요. 지금 ${esc(pvText(d.plugin))} → ${esc(pvText(d.available))}` : `최신 버전이에요 (${esc(pvText(d.plugin))})`;
-    return `<div class="etk-card etk-update"><div class="etk-flex"><div class="etk-card-name">서버 플러그인 업데이트</div><span class="etk-foot-gap"></span>${newPlugin(d) ? '<div class="menu_button etk-update-now"><i class="fa-solid fa-download"></i> 지금 업데이트</div>' : ''}</div>
-        <div class="etk-card-desc">${line}</div>
-        <label class="checkbox_label etk-update-auto"><input type="checkbox"${d.autoUpdate ? ' checked' : ''}><span>자동 업데이트 (실리태번 서버를 켤 때)</span></label></div>`;
+// 서버 플러그인 판마다 달라진 것(… 의 N 을 보고 들어왔을 때 무엇이 새로운지 보이게: 기능 줄이 늘지 않는 판은 목록만 봐서는 알 수 없었음)
+const SERVER_NOTES = { '1.2.3': '‘전부 잠시 끄기’를 누르면 서버 플러그인 기능도 같이 쉬어요.', '1.2.4': '서버 플러그인 화면의 ‘서버 다시 켜기’ 버튼으로 실리태번 서버를 다시 켤 수 있어요.' };
+const notesBetween = (from, to) => Object.entries(SERVER_NOTES).filter(([v]) => pv(v) > pv(from) && pv(v) <= pv(to)).map(([, t]) => t);
+const SERVER_NAMES = Object.fromEntries(SERVER_FEATURES.flatMap(f => f.server.map(k => [k, f.name])));
+// 다시 켜면 달라지는 것: 바꿔 둔 새 판의 바뀐 내용 + 켜고 끈 서버 기능(목록 줄 이름으로, 같은 줄은 한 번)
+// 다시 켰을 때 올라갈 판: 바꿔 둔 판과 받아 둔 새 판 가운데 높은 쪽(서버는 켜질 때 가장 높은 판을 올린다). 한 단계씩만 보이면 그만큼만 오르는 것처럼 읽혔다
+const nextVersion = (d) => (pv(d.available || 0) > pv(d.updated || 0) ? d.available : d.updated);
+function restartChanges(d) {
+    const to = nextVersion(d);
+    const lines = to && pv(to) > pv(d.plugin || 0) ? notesBetween(d.plugin || 0, to) : [];
+    const said = new Set();
+    for (const [k, want] of Object.entries(d.wanted || {})) {
+        if (!(k in d.features) || (want !== false) === serverOn(d.features[k]) || !SERVER_NAMES[k] || said.has(SERVER_NAMES[k])) continue;
+        said.add(SERVER_NAMES[k]);
+        lines.push(`${SERVER_NAMES[k]}${josaIga(SERVER_NAMES[k])} ${want !== false ? '켜져요' : '꺼져요'}`);
+    }
+    return lines;
+}
+// 이름 끝 글자에 받침이 있으면 '이', 없으면 '가'
+const josaIga = (word) => { const c = word.charCodeAt(word.length - 1) - 0xAC00; return c >= 0 && c <= 11171 && c % 28 ? '이' : '가'; };
+const STAT_ICON = { ok: 'check', new: 'arrow-up', again: 'rotate', no: 'plug' };
+const statHtml = (kind, text, note = '', button = '') => `<div class="etk-stat"><i class="etk-stat-dot etk-stat-${kind} fa-solid fa-${STAT_ICON[kind]}" aria-hidden="true"></i><span class="etk-stat-text"><b>${text}</b>${note ? `<small>${note}</small>` : ''}</span>${button}</div>`;
+const sbtn = (cls, text) => `<div class="etk-sbtn ${cls} interactable" role="button" tabindex="0">${text}</div>`;
+const whatHtml = (title, ver, lines) => (lines.length ? `<div class="etk-what"><b>${title}${ver ? `<small>${ver}</small>` : ''}</b>${lines.length > 1 ? `<ul>${lines.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : `<div>${esc(lines[0])}</div>`}</div>` : '');
+const autoHtml = (d) => `<label class="checkbox_label etk-update-auto"><input type="checkbox"${d.autoUpdate ? ' checked' : ''}><span>자동 업데이트 (실리태번 서버를 켤 때)</span></label>`;
+const verStep = (from, to) => `${esc(pvText(from))} → ${esc(pvText(to))}`;
+// 맨 위 상태 한 줄(+ 그 아래 상자). 서버 다시 켜기 버튼은 다시 켜야 적용되는 게 있을 때만, 그 주소가 있는 판(1.2.4)부터
+function serverTopHtml(d) {
+    if (!d) return statHtml('no', '아직 안 넣었어요', '넣으면 실리태번과 채팅이 더 빨리 열려요') + installHtml();
+    if (!d.plugin) return statHtml('new', '한 번 다시 넣어야 해요', '지금은 업데이트 기능이 없는 예전 버전이에요. 다시 넣은 다음부터는 여기서 버튼으로 업데이트해요') + installHtml();
+    const { restart, newer } = serverNews(d);
+    if (restart) {
+        const canRestart = pv(d.plugin || 0) >= pv('1.2.4');
+        const to = nextVersion(d), ver = to && pv(to) > pv(d.plugin) ? verStep(d.plugin, to) : '';
+        return statHtml('again', '서버를 다시 켜면 적용돼요', canRestart ? '' : '서버 창에서 껐다 켜 주세요', canRestart ? sbtn('etk-server-restart', '서버 다시 켜기') : '')
+            + whatHtml('적용되는 것', ver, restartChanges(d)) + autoHtml(d);
+    }
+    if (newer) return statHtml('new', '새 버전이 있어요', verStep(d.plugin, d.available), sbtn('etk-update-now', '업데이트')) + whatHtml('바뀐 것', verStep(d.plugin, d.available), notesBetween(d.plugin, d.available)) + autoHtml(d);
+    if (d.paused) return statHtml('no', '잠시 꺼 뒀어요', '… 버튼의 다시 켜기로 켜요') + autoHtml(d);
+    return statHtml('ok', '작동 중', `버전 ${esc(pvText(d.plugin))}`) + autoHtml(d);
+}
+// '서버 플러그인이 하는 일' 줄: 줄을 누르면 그 기능이 있는 갈래로. onlyResting = 쉴 때만 보이는 받침 기능
+const SERVER_USES = [
+    { name: '빨리 열기', icon: 'forward-fast', group: '속도', bundle: '빨리 열기', members: SERVER_FEATURES.filter(f => f.bundle === '빨리 열기').flatMap(f => f.server) },
+    { name: '브라우저 탭 그림', icon: 'icons', group: '꾸미기', members: ['tab_icon'] },
+    { name: '옛 답 모양 지키기', icon: 'thumbtack', group: '채팅', members: ['regex_hook'] },
+    { name: '로딩 화면', icon: 'hourglass-half', group: '꾸미기', members: ['loading_screen'], onlyResting: true },
+];
+const REST_NOTE = '‘휴식’으로 보이는 기능은 실리태번이 업데이트되면서 기능이 들어갈 자리가 바뀌어 멈춘 상태예요. 그 기능만 빠지고 실리태번과 나머지 기능은 그대로 돌아가요.';
+// 묶음 안에 든 서버 기능 하나하나의 이름(펼친 안쪽 줄에 보임). 여기 없는 기능은 서버가 알려 준 이름 그대로
+const SERVER_PART_NAMES = { lazy_load: '프리셋과 테마를 쓸 때만 불러오기', folder_cache: '바뀌지 않은 설정 폴더는 다시 읽지 않기', settings_once: '설정 묶음 한 번만 받기', no_local_compression: '같은 컴퓨터에서는 압축 없이 보내기',
+    light_chat_open: '채팅을 열 때 캐릭터 칸 가볍게 채우기', early_message_frames: '상태창 먼저 띄우기', near_message_frames: '먼 상태창은 가까워질 때 그리기', chat_cache: '바뀌지 않은 채팅은 다시 읽지 않기' };
+const REST_WHY = '실리태번이 업데이트되면서 기능이 들어갈 자리가 바뀌어 멈춘 상태예요.';
+const ST_TEXT = { ok: '작동 중', rest: '휴식', off: '꺼짐' };
+// 펼쳐 둔 '하는 일' 줄(이름). 화면을 닫으면 잊음
+const usesOpen = new Set();
+// 서버 기능 하나의 상태: ok 작동 중, rest 켜 뒀지만 자리가 안 맞아 쉼, off 꺼짐. note = 그 까닭이나 서버를 다시 켜면 바뀔 것
+function partState(d, k) {
+    const v = d.features[k], want = d.wanted ? d.wanted[k] !== false : serverOn(v);
+    if (want && String(v).startsWith('mismatch')) return { kind: 'rest', note: REST_WHY };
+    if (want !== serverOn(v)) return { kind: want ? 'off' : 'ok', note: `서버를 다시 켜면 ${want ? '켜져요' : '꺼져요'}` };
+    return { kind: want ? 'ok' : 'off', note: '' };
+}
+// 상태 글: 작동 중은 초록 점, 휴식은 강조색, 꺼짐은 흐리게(색은 style.css). arrow = 펼치는 줄의 화살표
+const stHtml = (kind, arrow = '') => `<span class="etk-st etk-st-${kind}">${ST_TEXT[kind]}${arrow ? `<i class="fa-solid fa-chevron-${arrow}" aria-hidden="true"></i>` : ''}</span>`;
+const partHtml = (d, k) => { const st = partState(d, k); return `<div class="etk-part"><div class="etk-part-text">${esc(SERVER_PART_NAMES[k] || k)}${st.note ? `<small>${esc(st.note)}</small>` : ''}</div>${stHtml(st.kind)}</div>`; };
+// 하는 일 한 줄. 안에 든 기능이 여럿이면 누를 때 그 자리에서 펼쳐 하나하나의 상태를 보이고, 켜고 끄는 갈래로 가는 길은 펼친 맨 아래에 둠.
+//   하나뿐이면 펼칠 것이 없어 상태만 보이고 누르면 그 갈래로 감
+function useRowHtml(u, d) {
+    const names = u.members.filter(k => k in d.features);
+    if (!names.length) return '';
+    const kinds = names.map(k => partState(d, k).kind);
+    const kind = kinds.includes('rest') ? 'rest' : kinds.includes('ok') ? 'ok' : 'off';
+    if (u.onlyResting && kind !== 'rest') return '';
+    const fold = names.length > 1, open = fold && usesOpen.has(u.name);
+    const row = `<div class="etk-row etk-use${kind === 'rest' ? ' etk-use-rest' : ''}${open ? ' etk-opened' : ''}" tabindex="0" data-group="${esc(u.group)}" data-bundle-to="${esc(u.bundle || '')}"${fold ? ` data-fold="${esc(u.name)}" aria-expanded="${open}"` : ''}>${iconHtml(u.icon)}
+        <div class="etk-row-text"><div class="etk-row-name">${esc(u.name)}</div><div class="etk-row-desc">${esc(u.group)}</div></div>${stHtml(kind, fold ? (open ? 'up' : 'down') : '')}</div>`;
+    if (!open) return row;
+    return `<div class="etk-unit">${row}<div class="etk-inner etk-parts">${names.map(k => partHtml(d, k)).join('')}
+        <div class="etk-part-go" role="button" tabindex="0" data-group="${esc(u.group)}" data-bundle-to="${esc(u.bundle || '')}">${esc(u.group)}에서 켜고 끄기<i class="fa-solid fa-chevron-right" aria-hidden="true"></i></div></div></div>`;
+}
+// 서버는 알려 주는데 위 목록에 없는 기능(플러그인이 breeze 보다 새 판일 때): 맨 아래에 한 줄씩, 상태만
+function extraUsesHtml(d) {
+    const known = new Set(SERVER_USES.flatMap(u => u.members));
+    return Object.keys(d.features).filter(k => !known.has(k)).map(k => `<div class="etk-row etk-use-plain">${iconHtml('plug')}<div class="etk-row-text"><div class="etk-row-name">${esc(k)}</div></div>${stHtml(partState(d, k).kind)}</div>`).join('');
+}
+function usesHtml(d) {
+    const rows = SERVER_USES.map(u => useRowHtml(u, d)).join('') + extraUsesHtml(d);
+    return `<div class="etk-uses"><div class="etk-sec-label">서버 플러그인이 하는 일</div>${rows}${rows.includes('etk-use-rest') ? `<div class="etk-card-desc etk-note">${REST_NOTE}</div>` : ''}</div>`;
+}
+// 하는 일 줄을 펼치거나 접기: 서버에 다시 묻지 않고 그 칸만 다시 그림(누른 줄에 초점을 돌려줌)
+function toggleUse(name) {
+    usesOpen.has(name) ? usesOpen.delete(name) : usesOpen.add(name);
+    const box = dialog()?.querySelector('.etk-uses');
+    if (!box || !serverData) return;
+    box.outerHTML = usesHtml(serverData);
+    [...dialog().querySelectorAll('.etk-use[data-fold]')].find(r => r.dataset.fold === name)?.focus({ preventScroll: true });
+}
+
+// 서버 다시 켜기: 묻고 → 서버에 시킴 → 새 서버가 대답할 때까지 기다렸다가 화면을 새로고침(다시 켜진 서버는 이 화면의 로그인 표를 모름)
+async function restartServer() {
+    const c = ctx();
+    const ok = await c.callGenericPopup('실리태번 서버를 다시 켤까요?<br><small>답을 받는 중이면 끊겨요. 다시 켜진 뒤에는 서버 창에서 Ctrl+C 로 꺼지지 않을 수 있어요(창을 닫으면 꺼져요). 켜지면 이 화면은 저절로 새로고침돼요.</small>', c.POPUP_TYPE.CONFIRM, '', { okButton: '다시 켜기', cancelButton: '취소' });
+    if (!ok) return;
+    let old = 0;
+    try {
+        const res = await fetch('/api/plugins/breeze-server/restart', { method: 'POST', headers: c.getRequestHeaders(), body: '{}' });
+        if (!res.ok) throw new Error(String(res.status));
+        old = (await res.json()).boot || 0;
+    } catch (e) { toastr.error('서버를 다시 켜지 못했어요. 서버 창에서 직접 껐다 켜 주세요.', 'breeze'); return; }
+    toastr.info('서버를 다시 켜는 중이에요. 켜지면 새로고침할게요.', 'breeze', { timeOut: 0, extendedTimeOut: 0 });
+    // 새 서버인지는 서버가 켜진 때(boot)가 바뀐 것으로 앎: 옛 서버가 아직 대답하는 동안 새로고침하면 곧 끊긴 화면이 됨
+    for (let i = 0; i < 150; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        try {
+            const r = await fetch('/api/plugins/breeze-server/status', { cache: 'no-store' });
+            if (r.ok) { const boot = (await r.json()).boot; if (boot && boot !== old) { location.reload(); return; } }
+            else if (r.status === 401 || r.status === 403) { location.reload(); return; }   // 새 서버가 이 화면의 로그인 표를 모름 = 새 서버
+        } catch { /* 아직 안 켜짐 */ }
+    }
+    toastr.clear();
+    toastr.error('서버가 대답하지 않아요. 서버 창을 확인해 주세요.', 'breeze', { timeOut: 0 });
 }
 async function postUpdate(body) {
     const res = await fetch('/api/plugins/breeze-server/update', { method: 'POST', headers: ctx().getRequestHeaders(), body: JSON.stringify(body) });
@@ -893,7 +1233,6 @@ async function postUpdate(body) {
     return res.json();
 }
 function wireUpdate(el) {
-    wireInstall(el.querySelector('.etk-update') || el);
     el.querySelector('.etk-update-now')?.addEventListener('click', async () => {
         try { const d = await postUpdate({ apply: true }); toastr.info(d.updated ? `새 버전(${pvText(d.updated)})으로 바꿔 두었어요. 실리태번 서버를 다시 켜면 적용돼요.` : '바꿀 새 버전이 없어요.', 'breeze'); }
         catch (e) { console.warn('[Breeze] 서버 플러그인 업데이트', e); toastr.error('서버 플러그인을 업데이트하지 못했어요.', 'breeze'); }
@@ -907,59 +1246,12 @@ function wireUpdate(el) {
 async function showServerStatus() {
     const el = dialog()?.querySelector('.etk-server');
     if (!el) return;
-    let features = null, wanted = null, data = null;
-    try {
-        const res = await fetch('/api/plugins/breeze-server/status', { headers: ctx().getRequestHeaders() });
-        if (res.ok) { data = await res.json(); features = data.features; wanted = data.wanted || null; }
-    } catch { /* 없음 */ }
+    const d = await askServer(true);
     if (!dialog()?.contains(el)) return;
-    setServerCount(features, data);
-    if (!features) {
-        el.innerHTML = `<div class="etk-card"><div class="etk-card-name">서버 플러그인이 없어요</div><div class="etk-card-desc">없어도 다른 기능은 그대로 쓸 수 있어요.</div></div>
-            <div class="etk-section">넣으면 추가되는 것</div>
-            ${SERVER_GROUPS.map(g => `<div class="etk-server-row"><i class="fa-solid fa-plus"></i><span>${g.name}${g.desc ? `<small class="etk-server-desc">${g.desc}</small>` : ''}</span></div>`).join('')}
-            <div class="etk-section">설치 방법 1 · 명령어 한 줄</div>
-            <ol class="etk-steps etk-install-steps"><li><b>터미널 열기</b><small class="etk-install-how"></small></li><li><b>아래 명령을 복사해 붙여 넣고 Enter</b><small>실리태번 폴더를 알아서 찾아 설치해요.</small><small>못 찾으면 ‘실리태번 폴더를 못 찾았어요’라고 알려 주고 아무것도 바꾸지 않아요.</small></li></ol>
-            ${installBoxHtml()}
-            <div class="etk-section">설치 방법 2 · 폴더 직접 옮기기</div>
-            <ol class="etk-steps etk-install-steps"><li><b>폴더 복사</b><small>breeze 확장 폴더 안의 <code>server-plugin/breeze-server</code> 폴더를</small><small>실리태번 폴더의 <code>plugins</code> 폴더 안으로 복사해요.</small></li><li><b>설정 한 줄 바꾸기</b><small>실리태번 폴더의 <code>config.yaml</code> 을 메모장으로 열어</small><small><code>enableServerPlugins: false</code> 를 <code>true</code> 로 바꿔요.</small></li></ol>
-            <div class="etk-section">마지막 · 실리태번 서버를 끄고 다시 실행</div>
-            <div class="etk-card-desc">이 창 아래 줄의 ‘서버 없음’이 숫자로 바뀌면 설치가 끝난 거예요.</div>`;
-        wireInstall(el);
-        return;
-    }
-    const stateOf = (v) => (v === 'on' ? '작동 중' : String(v).startsWith('mismatch') ? '쉬는 중' : String(v).startsWith('off (') ? `꺼짐 (${String(v).slice(5, -1)})` : '꺼짐');
-    const row = (g) => {
-        const k = g.members[0], v = features[k];
-        const wants = g.members.map(m => (wanted ? wanted[m] !== false : serverOn(features[m])));
-        const anyWant = wants.some(Boolean), resting = g.members.filter((m, i) => wants[i] && String(features[m]).startsWith('mismatch'));
-        const label = !anyWant ? '꺼짐' : resting.length === g.members.length ? '쉬는 중' : resting.length ? '일부 쉬는 중' : wants.every(Boolean) ? '작동 중' : '일부 꺼짐';
-        const tools = g.members.length === 1 && k === 'tab_icon' && v === 'on' ? '<div class="etk-tab-icon-tools" title="지금 탭 아이콘"><img class="etk-tab-icon-now" alt=""><div class="menu_button etk-tab-icon-pick" title="그림을 골라 탭 · 홈 화면 아이콘으로 써요. 바뀌기까지 시간이 걸릴 수 있어요"><i class="fa-solid fa-image"></i> 그림 고르기</div><div class="menu_button etk-tab-icon-reset" hidden>원래대로</div></div>' : '';
-        // 앞의 동그라미 = 묶음째 켜고 끄기(서버를 다음에 켤 때 쓸지 — 플러그인 config.json). 서버 쪽 기능은 서버가 켜질 때 한 번 끼워서, 바꾸면 서버를 다시 켜야 먹음
-        const icon = !anyWant ? 'fa-circle-minus' : resting.length ? 'fa-circle-pause etk-warn' : 'fa-circle-check etk-ok';
-        const toggle = wanted ? ` etk-server-toggle interactable" tabindex="0" role="switch" aria-checked="${anyWant}" data-names="${esc(g.members.join(','))}" data-on="${anyWant}" title="${anyWant ? '누르면 끄기' : '누르면 켜기'}` : '';
-        const pending = wanted && g.members.some((m, i) => wants[i] !== serverOn(features[m])) ? `<small class="etk-server-pending">서버를 다시 켜면 ${anyWant ? '켜져요' : '꺼져요'}</small>` : '';
-        const inside = g.members.length > 1 ? `<details class="etk-server-inside"><summary>안에 든 기능 ${g.members.length}개</summary>${g.members.map(m => `<div><span>${SERVER_NAMES[m] || m}</span><small>${esc(stateOf(features[m]))}</small></div>`).join('')}</details>` : '';
-        return `<div class="etk-server-row${tools || inside ? ' etk-has-tools' : ''}"><i class="fa-solid ${icon}${toggle}"></i><span>${g.name}${g.desc ? `<small class="etk-server-desc">${g.desc}</small>` : ''}</span><small>${esc(label)}</small>${pending}${inside}${tools}</div>`;
-    };
-    // 받침 기능은 쉬는 중일 때만 한 줄로(끄는 버튼 없음)
-    const hiddenResting = SERVER_HIDDEN.filter(k => String(features[k] || '').startsWith('mismatch')).map(k => `<div class="etk-server-row"><i class="fa-solid fa-circle-pause etk-warn"></i><span>${SERVER_NAMES[k] || k}</span><small>쉬는 중</small></div>`).join('');
-    // 다시 켜야 적용되는 게 있으면 맨 위에 글로(아래 줄 '서버' NEW 의 까닭 — 휴대폰은 마우스를 올려 볼 수 없어서 화면에 씀)
-    const restartNote = serverNew && serverNewWhy.startsWith('서버를 다시') ? '<div class="etk-restart-note"><i class="fa-solid fa-rotate"></i> 실리태번 서버를 다시 켜야 바뀐 게 적용돼요.</div>' : '';
-    el.innerHTML = `${restartNote}${updateHtml(data)}<div class="etk-card"><div class="etk-card-name">서버 플러그인 설치 완료</div><div class="etk-card-desc">아래 기능은 실리태번 서버 쪽에서 돌아가요.</div></div>
-        ${serverRows(features).map(row).join('')}${hiddenResting}
-        <div class="etk-card-desc etk-note">‘쉬는 중’으로 보이는 기능은 실리태번이 업데이트되면서 기능이 들어갈 자리가 바뀌어 멈춘 상태예요.<br>그 기능만 빠지고 실리태번과 나머지 기능은 그대로 돌아가요.</div>`;
-    wireTabIcon(el);
+    el.innerHTML = serverTopHtml(d) + (d?.plugin ? usesHtml(d) : '');
+    wireInstall(el);
     wireUpdate(el);
-    el.querySelectorAll('.etk-server-toggle').forEach(cb => cb.addEventListener('click', async () => {
-        try {
-            for (const name of cb.dataset.names.split(',')) {   // 묶음 안 기능을 하나씩(서버 주소는 기능 하나씩 받음)
-                const res = await fetch('/api/plugins/breeze-server/features', { method: 'POST', headers: ctx().getRequestHeaders(), body: JSON.stringify({ name, on: cb.dataset.on !== 'true' }) });
-                if (!res.ok) throw new Error(String(res.status));
-            }
-        } catch (e) { console.warn('[Breeze] 서버 기능 켜고 끄기', e); toastr.error('서버 플러그인 설정을 바꾸지 못했어요.', 'breeze'); }
-        showServerStatus();
-    }));
+    el.querySelector('.etk-server-restart')?.addEventListener('click', restartServer);
 }
 
 // 다른 코드(시험 · 다른 확장)가 기능을 켜고 끄거나 세부 설정을 열 수 있게
@@ -968,12 +1260,7 @@ globalThis[Symbol.for('breeze.api')] = {
     isOn: (id) => !!settings().enabled[id],
     set: (id, on) => setEnabled(id, on),
     openSettings: openDialog,
-    openOptions(id) {
-        const f = FEATURES.find(x => x.id === id);
-        if (!f) return;
-        ui.view = f.bundle && bundleAsFeature(f.bundle).hasOptions ? `bundle:${f.bundle}` : id; ui.query = '';
-        if (dialog()) renderDialog(); else openDialog();
-    },
+    openOptions,
 };
 
 jQuery(async () => {
@@ -981,6 +1268,8 @@ jQuery(async () => {
     await loadStore().catch(error => console.warn('[Breeze] 설정 파일 읽기', error));
     const s = settings();
     await Promise.all(FEATURES.filter(f => s.enabled[f.id]).map(f => startFeature(f.id)));
+    import(`${BASE}lib/chat_jump_resume.js`).then(m => m.start()).catch(e => console.warn('[Breeze] 메시지로 이동 고침', e));   // 목록에 없는 고침: /chat-jump 가 중간에 멈추지 않게
     addLauncher();
+    syncWand();
     fitBrandWeight();
 });
