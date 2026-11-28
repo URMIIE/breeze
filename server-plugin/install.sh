@@ -25,5 +25,6 @@ if [ -z "$s" ]; then
 fi
 mkdir -p plugins/breeze-server && cp -R "$s/." plugins/breeze-server/ || exit 1
 sed -i.bak 's/^enableServerPlugins:.*/enableServerPlugins: true/' config.yaml
+grep -q '^enableServerPlugins:' config.yaml || printf '\nenableServerPlugins: true\n' >> config.yaml
 echo "breeze 서버 플러그인 설치 완료: $d"
 echo "실리태번 서버를 끄고 다시 실행하세요."

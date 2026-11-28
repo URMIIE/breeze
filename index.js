@@ -220,7 +220,7 @@ const WAND_SELF = 'breeze';
 // 그 메뉴에 자기 줄을 스스로 넣는 기능: 같은 기능에 줄이 둘 생기지 않게 여기서는 줄도 버튼도 두지 않음
 const OWN_WAND_ROW = new Set(['theme_fit']);
 // 줄을 둘 수 있는 기능: 쓰다가 자주 여는 화면이 있는 것만. 한 번 정하면 다시 안 여는 설정에까지 체크칸이 붙어 있으니 쓸데없는 곳에 다 있다는 지적을 받았다(나머지는 breeze 줄로 설정 창을 열어서 간다)
-const WAND_FEATURES = new Set(['done_sound', 'prompt_groups', 'chat_memory']);
+const WAND_FEATURES = new Set(['translator', 'done_sound', 'prompt_groups', 'chat_memory']);
 const canWand = (f) => WAND_FEATURES.has(f.id) && !!f.hasOptions && !isServer(f) && !OWN_WAND_ROW.has(f.id);
 const inWand = (id) => !!settings().wandMenu?.includes(id);
 function wandRows() {
@@ -228,13 +228,21 @@ function wandRows() {
     const self = list.includes(WAND_SELF) ? [{ id: WAND_SELF, icon: 'wind', name: 'breeze' }] : [];
     return self.concat(FEATURES.filter(f => canWand(f) && s.enabled[f.id] && list.includes(f.id)));
 }
+// 마법봉 줄을 눌렀을 때: 기능이 자기 화면을 따로 가졌으면(openFromWand) 그것을, 아니면 breeze 창의 그 기능 세부 설정을 연다
+async function openFromWand(id) {
+    try {
+        const mod = await import(`${BASE}features/${id}.js`);
+        if (typeof mod.openFromWand === 'function' && await mod.openFromWand() !== false) return;
+    } catch (e) { console.warn('[Breeze] 마법봉 줄', id, e); }
+    openOptions(id);
+}
 function wandRowEl(r) {
     const el = document.createElement('div');
     el.className = 'list-group-item flex-container flexGap5 interactable etk-wand-row';
     el.dataset.wand = r.id;
     el.tabIndex = 0;
     el.innerHTML = `<div class="fa-solid fa-${esc(r.icon)} extensionsMenuExtensionButton"></div>${esc(r.name)}`;
-    el.addEventListener('click', () => { globalThis.jQuery?.('#extensionsMenu').hide(); r.id === WAND_SELF ? openDialog() : openOptions(r.id); });
+    el.addEventListener('click', () => { globalThis.jQuery?.('#extensionsMenu').hide(); r.id === WAND_SELF ? openDialog() : openFromWand(r.id); });
     return el;
 }
 // 메뉴의 우리 줄을 설정과 같게 맞춤: 이미 같으면 아무것도 안 건드림(그래서 아래 감시가 우리가 넣은 것에 다시 불려도 거기서 멈춤)
@@ -716,7 +724,7 @@ function openDialog() {
             <div class="etk-back fa-solid fa-arrow-left interactable" tabindex="0" title="목록으로"></div>
             <div class="etk-brand">${LOGO}<b class="etk-brand-name">breeze</b></div>
             <b class="etk-title"></b>
-            <div class="etk-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="기능 찾기 (알림음, ㅇㄹ)"></div>
+            <div class="etk-search"><i class="fa-solid fa-magnifying-glass"></i><input type="search" placeholder="기능 찾기 (번역, ㅂㅇ)"></div>
             <div class="etk-top-tools"></div>
             <div class="etk-more fa-solid fa-ellipsis interactable" tabindex="0" title="더 보기" aria-haspopup="menu"></div>
             <div class="etk-close fa-solid fa-xmark interactable" tabindex="0" title="닫기"></div>
@@ -1057,16 +1065,15 @@ async function wireTabIcon(el) {
     refresh();
 }
 
-// 서버 플러그인 설치 명령: 설치 스크립트(server-plugin/install.sh · install.ps1)를 지금 이 실리태번 서버에서 받아 바로 실행.
+// 서버 플러그인 설치 명령: 설치 스크립트(server-plugin/install.mjs · install.ps1)를 지금 이 실리태번 서버에서 받아 바로 실행.
 //   명령에 다 적으면 열 줄이 넘어 붙여 넣기 겁났음 → 한 줄. 스크립트가 실리태번 폴더를 스스로 찾아서 터미널을 어느 폴더에서 열었든 됨
 const INSTALL_BASE = new URL('./server-plugin/', import.meta.url).href;
-const INSTALL_CMD = {
-    unix: () => `curl -fsSL ${INSTALL_BASE}install.sh | sh -s ${Number(location.port) || 8000}`,
-    win: () => `irm ${INSTALL_BASE}install.ps1 | iex`,
-};
+// 윈도우도 같은 한 줄(node 는 실리태번이 도는 곳이면 늘 있음): PowerShell 스크립트는 .bat 로 켠 경우만 폴더를 찾았음
+const NODE_INSTALL = () => `node -e "fetch(process.argv[1]+'install.mjs').then(r=>r.ok?r.text():Promise.reject(r.status)).then(t=>import('data:text/javascript,'+encodeURIComponent(t)),e=>console.log('실리태번 주소에서 설치 파일을 못 받았어요(로그인 · 주소 확인)',e))" ${INSTALL_BASE} ${Number(location.port) || 8000}`;
+const INSTALL_CMD = { unix: NODE_INSTALL, win: NODE_INSTALL };
 // 터미널 여는 법(처음 하는 사람용): 고른 기기 칸에 맞춰 보임. 첫 줄은 1단계 글, 나머지는 그 아래 작은 글
 const INSTALL_HOW = {
-    unix: ['맥: 터미널 앱을 열어요.', '안드로이드: Termux 를 새로 열어요.', '폴더는 어디든 괜찮아요. 실리태번 서버는 켜 둔 채로 해요.'],
+    unix: ['맥: 터미널 앱을 열어요.', '안드로이드: Termux 나, 실리태번을 켜 주는 앱의 명령 창을 열어요.', '폴더는 어디든 괜찮아요. 실리태번 서버는 켜 둔 채로 해요.'],
     win: ['시작 버튼을 오른쪽 클릭 › ‘터미널’을 눌러요.', '윈도우 10 은 ‘Windows PowerShell’이에요.', '폴더는 어디든 괜찮아요. 실리태번 서버는 켜 둔 채로 해요.'],
 };
 // 명령어를 못 쓰는 사람(터미널이 낯설거나 막힌 곳)을 위한 다른 길: 폴더를 손으로 옮기기. 자주 쓰는 길이 아니라 한 줄로 접어 두고 누르면 그 자리에서 펼침

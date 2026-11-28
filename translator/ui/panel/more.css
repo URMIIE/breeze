@@ -1,0 +1,87 @@
+/* ── 새 설정 판의 '그 밖의 설정' 화면(more.js). 모습은 common.css(시안 그대로), 여기는 시안이 줄마다 따로 적어 둔 배치만 ── */
+.btr-plan .btr-more-screen .btr-more-top { margin-top: 0; }
+.btr-plan .btr-more-screen .btr-more-keeps { margin-top: 8px; }
+.btr-plan .btr-more-screen .btr-more-gap { margin-top: 12px; }
+.btr-plan .btr-more-screen .line .v > i { margin-left: 6px; font-size: 13px; color: var(--ink); }
+.btr-plan .btr-more-screen .seg span, .btr-plan .btr-more-screen .go { cursor: pointer; }
+/* 고급: 편 자리에 줄 넷이 그대로 놓인다(안쪽 여백과 바탕 없이) */
+.btr-plan .btr-more-screen .open.btr-more-adv { padding: 0; background: none; }
+.btr-plan .btr-more-screen .btr-more-code { font-family: ui-monospace, monospace; font-size: 13px; }
+/* 적는 칸: 실제 input 이라 폭과 글꼴을 판의 것으로 맞춘다 */
+.btr-plan .btr-more-screen input.input, .btr-plan .btr-more-screen textarea.input { display: block; width: 100%; min-width: 0; margin: 0; font-family: inherit; color: var(--ink); box-sizing: border-box; }
+.btr-plan .btr-more-screen .input::placeholder { color: var(--mute); opacity: 1; }
+.btr-plan .btr-more-screen .num input.input { width: 58px; text-align: center; }
+.btr-plan .btr-more-screen textarea.btr-more-area { min-height: 120px; padding: 8px 12px; font-size: 13px; line-height: 1.5; resize: vertical; }
+.btr-plan .btr-more-screen .btr-more-inrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 8px; align-items: center; }
+/* 지우기 표시는 줄의 글 칸처럼 늘어나지 않는다(공통 규칙이 줄 안의 span 을 전부 늘린다) */
+.btr-plan .btr-more-screen .btr-more-del { flex: none; display: grid; place-items: center; width: 32px; height: 32px; color: var(--mute); cursor: pointer; overflow: visible; }
+.btr-plan .btr-more-screen .term.btr-more-word { grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) !important; gap: 0; padding: 0; }
+.btr-plan .btr-more-screen .term .btr-more-find { font-family: inherit; font-size: 14px; color: var(--ink); }
+/* 낱말 바꾸기: 찾을 말이 칸 왼쪽 끝에 붙어 화살표와 멀었고, 본보기 두 칸(1:1)과 목록 칸(지우기 칸까지 넷)의 세로선이 달랐다.
+   목록을 본보기와 같은 두 칸(사이 24px)으로 나눠 지우기 · 넣기는 바꿀 말 칸 끝에 둔다 */
+/* 찾을 말은 왼쪽부터 적는다(위 본보기 칸의 글 시작 자리와 같게 12px 띄움) */
+.btr-plan .btr-more-screen .term.btr-more-word > span:first-child { text-align: left; padding-left: 12px; }
+.btr-plan .btr-more-screen .term.btr-more-word > i { text-align: center; }
+.btr-plan .btr-more-screen .term .btr-more-to { display: flex; align-items: center; gap: 8px; overflow: visible; }
+.btr-plan .btr-more-screen .term .btr-more-to > span:first-child { flex: 1; min-width: 0; padding-left: 12px; }
+.btr-plan .btr-more-screen .term .btr-more-to > .input { flex: 1; min-width: 0; }
+.btr-plan .btr-more-screen .term .btr-more-to > .go { flex: none; overflow: visible; }
+.btr-plan .btr-more-screen .ba.btr-more-wordba { gap: 24px; }
+/* 텍스트 보호 본보기: 점선 상자가 좁은 칸에서 둘로 쪼개졌다. 상자는 한 덩이로 두고, 칸이 좁으면 원문 · 번역을 위아래로 */
+.btr-plan .btr-more-screen mark.hold { white-space: nowrap; }
+.btr-plan .btr-more-screen .ba.btr-more-holdba { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+/* 이름과 값을 한 줄에: 참고할 대화 개수 */
+.btr-plan .btr-more-screen .two.btr-more-count { margin-top: 4px; }
+/* 멈춤 감지: 숫자 셋을 한 줄에(휴대폰 폭에서도 셋이 들어가게 이름은 줄바꿈될 수 있고 칸은 아래에 맞춘다) */
+.btr-plan .btr-more-screen .btr-more-stall { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.btr-plan .btr-more-screen .btr-more-stall .num { white-space: nowrap; }
+/* 고급의 켜고 끄는 줄: 줄 오른쪽 체크칸이 누르는 자리(손가락으로 누르기 쉽게 넓게) */
+.btr-plan .btr-more-screen .line .v.btr-more-flip { display: grid; place-items: center; width: 44px; height: 40px; margin-right: -8px; overflow: visible; cursor: pointer; }
+.btr-plan .btr-more-screen .btr-more-pen { grid-template-columns: 1fr 36px; }
+.btr-plan .btr-more-screen .btr-more-pen > span { color: var(--ink); font-size: 14px; }
+.btr-plan .btr-more-screen .btr-more-pen .sel { justify-content: center; padding: 0; }
+.btr-plan .btr-more-screen .btr-more-pen .sel.up i { color: var(--rose); }
+.btr-plan .btr-more-screen .line.btr-more-detail { padding: 0; margin-top: 8px; min-height: 36px; border-top: 0; }
+.btr-plan .btr-more-screen .line.btr-more-detail .k { max-width: none; }
+.btr-plan .btr-more-screen .btr-more-refs { gap: 0 8px; }
+/* 메시지에 보일 버튼: 한 줄씩 늘어놓지 않고 누르면 켜지고 꺼지는 버튼을 한 줄에(좁으면 줄바꿈) */
+.btr-plan .btr-more-screen .btr-more-btnpick { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+.btr-plan .btr-more-screen .btr-more-btnpick .set { cursor: pointer; gap: 5px; height: 28px; padding: 0 10px; font-size: 12.5px; }
+/* 프롬프트 고치기 연필: 테두리 있는 긴 알약 꼴로 늘어나 보였다. 다른 화면의 연필과 같은 작은 그림 버튼으로 */
+.btr-plan .btr-more-screen .btr-more-pen .sel { flex: none; justify-self: end; width: 36px; height: 36px; min-height: 0; padding: 0; border: 0; background: none; justify-content: center; }
+/* 프리필 본보기: 적는 칸처럼 테두리 친 상자였는데 적을 수 없었다. 테두리 없는 글로 두고, 프리필 글은 앞 두 줄만(전부는 아래 글 칸에) */
+.btr-plan .btr-more-screen .btr-more-req { margin-top: 4px; }
+.btr-plan .btr-more-screen .btr-more-req small { display: block; font-size: 12.5px; color: var(--mute); }
+/* 보내는 순서: 번호 붙은 세 줄. 셋째(프리필)만 색을 넣고 그 아래에 프리필 글 앞 두 줄을 보여 준다 */
+.btr-plan .btr-more-screen .btr-more-req ol { margin: 6px 0 0; padding: 0; list-style: none; counter-reset: order; font-size: 13.5px; color: var(--mute); }
+.btr-plan .btr-more-screen .btr-more-req li { counter-increment: order; padding: 3px 0 3px 22px; position: relative; }
+.btr-plan .btr-more-screen .btr-more-req li::before { content: counter(order); position: absolute; left: 0; top: 3px; width: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.btr-plan .btr-more-screen .btr-more-req li.on { color: var(--ink); }
+.btr-plan .btr-more-screen .btr-more-req code { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 2px 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.4; color: var(--rose); font-family: ui-monospace, monospace; font-size: 13px; }
+/* 프리필 칸: 4줄 높이로 고정해 긴 글이 잘려 보였다. 글 줄 수만큼 늘고(more.js prefillRows), 아주 길면 칸 안에서 굴린다 */
+.btr-plan .btr-more-screen textarea.btr-more-area[data-text="prefill"] { min-height: 5.5em; height: auto; max-height: 22em; overflow-y: auto; field-sizing: content; }
+/* '자세히'를 펴면 첫 이름표가 '자세히' 줄의 작은 글 바로 밑에 붙었다(첫 이름표의 위 여백 0): 다른 이름표와 같은 간격을 둔다 */
+.btr-plan .btr-more-screen .fold[data-f="p:detail"] > div > .lab.btr-more-top:first-child { margin-top: 8px; }
+/* 버튼 끌기(drag-order.js): 손가락으로 길게 눌러 끄는 동안 화면이 굴러가거나 글자가 골라지지 않게, 끄는 버튼은 살짝 떠 보이게 */
+.btr-plan .btr-more-screen .btr-more-btnpick .set { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.btr-plan .btr-more-screen .btr-more-btnpick .set.btr-dragging { opacity: .7; box-shadow: 0 2px 8px rgba(30, 36, 48, .2); cursor: grabbing; }
+/* 줄 값 자리의 그림 규칙(.v 안의 i: 왼쪽 여백 · 글자색)이 체크 표시에도 걸려 체크가 칸 밖으로 밀리고 어둡게 보였다 */
+.btr-plan .btr-more-screen .line .v.btr-more-flip .chk i { margin: 0; color: var(--on); font-size: 11px; opacity: 1; }
+.btr-plan .btr-more-screen .term.th.btr-more-word span { color: var(--mute); font-size: 13px; }
+/* '자세히' 줄은 화면 줄(data-t)이 아니라 줄 안의 펼침(data-t2)이라 펴도 화살표를 뒤집는 공통 규칙이 걸리지 않았다 */
+.btr-plan .btr-more-screen [data-t2].up > svg:last-child { transform: rotate(180deg); }
+
+/* 출처와 라이선스: 누르는 줄과, 그 자리에 펼쳐지는 글 */
+.btr-plan .btr-more-credits-line { cursor: pointer; }
+.btr-plan .btr-more-credits { padding: 4px 14px 14px; font-size: 13.5px; line-height: 1.6; color: var(--mute); text-align: center; }
+.btr-plan .btr-more-credits p { margin: 0 0 8px; }
+.btr-plan .btr-more-credits a { color: inherit; text-decoration: underline; }
+
+/* 원문 | 번역 두 칸 예시: 좁은 화면에서 칸이 글 길이만큼 벌어져 옆으로 넘치지 않게, 칸 안에서 줄을 바꾼다 */
+.btr-plan .btr-more-screen .ba.btr-more-top > div { min-width: 0; }
+.btr-plan .btr-more-screen .ba.btr-more-top p { overflow-wrap: anywhere; }
+
+/* 괄호 빼기 예시의 번역 칸: 빠지는 괄호를 흐리게 보여 준다 */
+.btr-plan .btr-more-screen .btr-more-gone { opacity: .35; }
+/* 예시 칸의 점선 표시: 칸이 좁으면 줄을 바꾼다(한 줄로 묶어 두면 휴대폰에서 칸 밖으로 나간다) */
+.btr-plan .btr-more-screen .ba.btr-more-top mark.hold { white-space: normal; -webkit-box-decoration-break: clone; box-decoration-break: clone; }

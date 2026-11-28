@@ -7,10 +7,7 @@
 import { getGeneratingModel, getGeneratingApi, main_api, saveChatDebounced } from '../../../../../script.js';
 import { extension_settings } from '../../../../extensions.js';
 import { power_user } from '../../../../power-user.js';
-import { createPresetStamp, SHOW_ROWS as CORE_ROWS } from '../lib/preset-stamp-core.js';
-
-// 번역 모델 줄은 번역을 마친 신호가 번역 모델을 실어 줄 때만 채워지는데, 이 묶음에는 그 신호를 내는 번역 기능이 없어 늘 빈 줄이라 뺌
-const SHOW_ROWS = CORE_ROWS.filter(([key]) => key !== 'translation');
+import { createPresetStamp, SHOW_ROWS } from '../lib/preset-stamp-core.js';
 
 const ctx = () => SillyTavern.getContext();
 let api = null;

@@ -1,0 +1,47 @@
+/* 번역 수정 화면(edit.js): 버튼 줄과 고치는 칸. 메시지 본문 자리에 놓인다. 색은 실리태번 테마 값에서 가져온다. */
+.btr-edit {
+    --btr-ink: var(--SmartThemeBodyColor);
+    --btr-paper: var(--SmartThemeBlurTintColor);
+    --btr-rose: var(--SmartThemeQuoteColor);
+    --btr-line: var(--SmartThemeBorderColor);
+    --btr-field: color-mix(in srgb, var(--btr-ink) 5%, var(--btr-paper));
+    --btr-mute: color-mix(in srgb, var(--btr-ink) 72%, var(--btr-paper));
+    --btr-wash: color-mix(in srgb, var(--btr-rose) 10%, var(--btr-paper));
+    --btr-hair: color-mix(in srgb, var(--btr-line) 70%, transparent);
+    /* 고치는 자리의 높이는 고정이고 안에서 스크롤한다(글 길이에 따라 메시지 높이가 출렁이지 않게) */
+    --btr-edit-height: clamp(240px, 62vh, 560px);
+    display: block; width: 100%; color: var(--btr-ink); font-size: 14.5px; line-height: 1.45;
+}
+.btr-edit *, .btr-edit *::before, .btr-edit *::after { box-sizing: border-box; }
+.btr-edit [hidden] { display: none !important; }
+
+/* 버튼 줄: 왼쪽에 보는 것과 다시 번역, 오른쪽에 취소와 저장 */
+.btr-edit .btr-edit-bar { display: flex; align-items: center; margin: 0 0 8px; padding: 0 4px; border: 1px solid var(--btr-line); border-radius: 10px; background: color-mix(in srgb, var(--btr-ink) 5%, transparent); }
+.btr-edit .btr-edit-bar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; flex: none; min-width: 48px; height: 50px; margin: 0; padding: 0 8px; border: 0; border-radius: 8px; background: none; color: var(--btr-mute); font-size: 16px; cursor: pointer; }
+.btr-edit .btr-edit-bar button > small { font-size: 11px; line-height: 1; white-space: nowrap; }
+.btr-edit .btr-edit-bar button:focus-visible { outline: 2px solid var(--btr-rose); outline-offset: -2px; }
+.btr-edit .btr-edit-bar .btr-edit-gap { flex: 1; }
+.btr-edit .btr-edit-bar .btr-edit-ok, .btr-edit .btr-edit-bar button[aria-pressed="true"] { color: var(--btr-rose); }
+.btr-edit .btr-edit-bar button[aria-pressed="true"] { background: var(--btr-wash); }
+
+.btr-edit .btr-edit-scroll { display: flex; flex-direction: column; gap: 8px; height: var(--btr-edit-height); position: relative; }
+.btr-edit .btr-edit-scroll.btr-edit-paired { display: block; overflow-y: auto; overscroll-behavior: contain; }
+.btr-edit textarea {
+    display: block; width: 100%; margin: 0; border: 1px solid var(--btr-line); border-radius: 10px; background: var(--btr-field); color: var(--btr-ink);
+    font: inherit; white-space: pre-wrap; resize: none;
+}
+.btr-edit textarea:focus-visible { outline: 2px solid var(--btr-rose); outline-offset: -1px; }
+/* 번역문 전체를 고치는 칸 */
+.btr-edit .btr-edit-area { flex: 1; min-height: 0; padding: 12px; font-size: 14.5px; line-height: 1.75; overflow-y: auto; }
+.btr-edit .btr-edit-measure { position: absolute; left: 0; top: 0; visibility: hidden; pointer-events: none; white-space: pre-wrap; overflow-wrap: break-word; font-size: 14.5px; line-height: 1.75; }
+
+/* 원문: 왼쪽 선이 있는 흐린 글 */
+.btr-edit .btr-edit-src { padding: 6px 0 6px 12px; border-left: 2px solid color-mix(in srgb, var(--btr-rose) 55%, transparent); color: var(--btr-mute); font-size: 14px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* 문단 수가 달라 짝을 못 지을 때: 원문 전체를 위에(제 높이 안에서 스크롤) */
+.btr-edit .btr-edit-scroll > .btr-edit-src { flex: none; max-height: 38%; overflow-y: auto; }
+
+/* 나란히 보기: 문단마다 원문 아래에 번역 칸 */
+.btr-edit .btr-edit-row { padding: 10px 0; border-top: 1px solid var(--btr-hair); }
+.btr-edit .btr-edit-row:first-child { padding-top: 0; border-top: 0; }
+.btr-edit .btr-edit-row .btr-edit-src { margin: 0 0 6px; font-size: 13.5px; }
+.btr-edit .btr-edit-row textarea { min-height: 44px; padding: 9px 11px; font-size: 15px; line-height: 1.75; overflow: hidden; }

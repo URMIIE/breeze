@@ -1,0 +1,113 @@
+/* 상태창 번역 화면에만 있는 배치. 줄 · 칸 · 버튼 · 색의 모습은 common.css(시안의 클래스) 것을 쓴다 */
+.btr-plan .btr-status-root, .btr-plan.btr-status-root { position: relative; height: 100%; min-height: 0; display: flex; flex-direction: column; color: var(--ink); font-size: 14px; line-height: 1.45; }
+.btr-status-root :is(*, *::before, *::after) { box-sizing: border-box; }
+.btr-status-root [hidden] { display: none !important; }
+/* 버튼과 적는 칸을 브라우저 기본 모습에서 벗긴다(:where 라 공통 모습이 늘 이긴다) */
+.btr-status-root :where(button, input) { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; outline: none; box-shadow: none; appearance: none; }
+.btr-status-root :where(button) { cursor: pointer; }
+.btr-status-root :where(button:disabled) { cursor: default; opacity: .45; }
+.btr-status-root button:focus-visible { outline: 2px solid var(--rose); outline-offset: -2px; }
+.btr-status-root input.input { width: 100%; color: var(--ink); }
+.btr-status-root input.input::placeholder { color: var(--mute); opacity: 1; }
+
+/* 목록 쪽: 위는 스크롤, 맨 아래 버튼 줄은 붙박이 */
+.btr-status-root .slist, .btr-status-root .ssub { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+/* 글꼴 · 정규식 화면의 상자는 판의 오른쪽 칸 · 휴대폰 화면 안에서는 높이가 정해지지 않아 제 스크롤이 생기지 않는다.
+   그런데 overscroll-behavior: contain 이 걸려 있으면 바퀴 · 손가락 스크롤이 바깥(판의 스크롤 칸)으로 넘어가지 않아 아래로 못 내려갔다.
+   그래서 이 상자에는 걸지 않는다: 높이가 정해진 자리에서는 제가 스크롤하고, 아니면 판이 스크롤한다 */
+.btr-status-root .sscroll, .btr-status-root .ssub > div { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.btr-status-root .sscroll { overscroll-behavior: contain; }
+/* 판의 화면 칸은 내용만큼 늘어나서, 이 화면의 높이가 정해지지 않았다: 목록 상자가 스크롤하지 못해 늘 맨 위 줄만 그려지고 아래는 빈 자리였다.
+   이 화면이 든 칸은 판이 스크롤하지 않게 하고 높이를 칸에 맞춘다: 목록은 제 상자에서 스크롤하고 맨 아래 버튼 줄은 붙박이가 된다 */
+.btr-frame-scroll:has(> .btr-frame-body > .btr-status-root) { display: flex; flex-direction: column; overflow: hidden !important; }
+.btr-frame-scroll:has(> .btr-frame-body > .btr-status-root) > .rt { flex: none; }
+.btr-frame-body:has(> .btr-status-root) { flex: 1; min-height: 0; }
+.btr-status-root .sfont, .btr-status-root .skept { height: 100%; overflow-y: auto; scrollbar-width: none; }
+.btr-status-root .stitle { display: flex; align-items: center; gap: 6px; font-size: 17px; font-weight: 600; }
+.btr-status-root .sscope { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.btr-status-root .slink { flex: none; min-height: 28px; color: var(--rose); font-size: 13px; }
+.btr-status-root .sopts { margin-top: 8px; }
+.btr-status-root button.line { width: 100%; }
+.btr-status-root .line > .arr { flex: none; font-size: 11px; color: var(--edge); }
+.btr-status-root .line .v .fsample { color: var(--ink); font-size: 15px; }
+.btr-status-root .sscroll > .input { margin-top: 8px; }
+
+/* 걸러 보는 버튼: 옆으로 밀어서 더 본다 */
+.btr-status-root .filters { display: flex; gap: 8px; margin: 10px 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.btr-status-root .filters::-webkit-scrollbar { display: none; }
+.btr-plan.fix .btr-status-root .set, .btr-plan.fix.btr-status-root .set { height: 30px; padding: 0 12px; font-size: 13px; }
+
+/* 줄 목록과 그 줄 아래에 펼치는 고치는 칸 */
+.btr-status-root .srow { width: 100%; }
+.btr-status-root .srow b, .btr-status-root .srow small { overflow-wrap: anywhere; }
+/* 줄 안의 번역 · 원문: 반씩 나눈 두 칸이면 긴 글이 좁은 칸에서 서너 줄로 꺾이고 끝 한 글자만 다음 줄로 넘어갔다.
+   둘 다 짧으면 지금처럼 한 줄에 양 끝으로, 길면 번역이 온 폭을 쓰고 원문이 그 아래로 내려간다(제 글 길이에 따라 저절로).
+   번역(한글)은 낱말 사이에서만 꺾는다(글자 사이에서 꺾여 '붕 / 대'처럼 갈라졌다) */
+:is(.btr-plan .btr-status-root, .btr-plan.btr-status-root) .srow .two2 { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; row-gap: 2px; }
+.btr-status-root .srow .two2 > b { flex: 1 1 auto; min-width: 0; word-break: keep-all; }
+.btr-status-root .srow .two2 > small { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: left; }
+.btr-status-root .srow.cur { background: color-mix(in srgb, var(--rose) 12%, var(--field)); }
+.btr-status-root .srow.pick { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: center; }
+.btr-status-root .srow .sbody { display: block; min-width: 0; }
+.btr-status-root .srows > * + * { border-top: 1px solid var(--hair); }
+.btr-status-root .sedit { padding: 2px 14px 12px; background: color-mix(in srgb, var(--rose) 5%, var(--field)); }
+.btr-status-root .sedit .srcbox { font-size: 15px; overflow-wrap: anywhere; }
+.btr-status-root .sedit .where { padding: 2px 12px; background: var(--paper) !important; }
+.btr-status-root .sedit .kv span { overflow-wrap: anywhere; }
+.btr-status-root .sedit .btns { margin-top: 10px; }
+.btr-status-root .quiet { width: 100%; height: 36px; margin-top: 12px; border-top: 1px solid var(--hair); justify-content: flex-start; }
+.btr-status-root .sscroll { position: relative; }   /* 줄 목록의 자리(offsetTop)를 이 상자 안에서 잰다 */
+.btr-status-root .srows > .spad { border-top: 0; }
+.btr-status-root .sempty { min-height: 140px; display: grid; place-items: center; text-align: center; padding: 24px 20px; color: var(--mute); line-height: 1.6; white-space: pre-line; }
+
+/* 맨 아래 버튼 줄 */
+.btr-status-root .foot { margin: 0 -16px -16px; }
+.btr-status-root .foot .btns { justify-content: flex-end; }
+/* 맨 아래 칸은 위아래로 쌓인다(common.css .foot 의 flex-direction: column). common.css 의 .foot .go.solid { flex: 1 } 이 세로 쪽으로 걸려
+   높이 0 에서 시작해 버튼이 눌려 찌그러졌다(min-height: 0). 높이는 버튼 제 높이로 두고 폭만 칸에 맞춘다 */
+.btr-plan.fix.btr-status-root .foot > .go, .btr-plan.fix .btr-status-root .foot > .go { flex: none; }
+
+/* 글꼴 · 정규식 화면 */
+.btr-status-root .back { height: 36px; flex: none; }
+.btr-status-root .rtitle { font-size: 17px; font-weight: 600; }
+.btr-status-root .statusbox em { font-style: normal; }
+.btr-status-root .statusbox b { font-weight: 400; font-size: 18px; line-height: 1; }
+.btr-status-root .sfont > .input { margin-top: 8px; }
+.btr-status-root .sfont > .lab + .input, .btr-status-root .sfont .lab + .statusbox { margin-top: 0; }
+.btr-status-root .sfont .group { margin-top: 8px; }
+.btr-status-root .sfont .know .line { gap: 10px; }
+/* 지금 쓰이는 글꼴: 윗줄에 자리 이름과 글꼴 이름, 아랫줄에 미리 볼 글(적은 글이 길어도 한 줄에 다 보이게 따로 한 줄) */
+.btr-status-root .sfont .know .line { flex-wrap: wrap; row-gap: 2px; padding-top: 8px; padding-bottom: 8px; }
+.btr-status-root .sfont .know .k { flex: none; width: 52px; }
+.btr-status-root .sfont .know .fsample { flex: 1 0 100%; font-size: 17px; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; word-break: keep-all; }
+.btr-status-root .sfont .know .v { flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btr-status-root .krows { padding: 0 12px; }
+.btr-status-root .krow { padding: 8px 0; border-top: 1px solid var(--hair); }
+.btr-status-root .khead { display: flex; align-items: center; gap: 8px; }
+/* 글꼴 이름은 한 줄(자리 버튼 넷 옆이라 좁다): 넘칠 때만 끝을 줄인다 */
+.btr-status-root .khead > small { flex: 1; min-width: 0; font-size: 12.5px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btr-status-root .kslots { flex: none; display: flex; gap: 4px; }
+.btr-plan.fix .btr-status-root .kslots .set, .btr-plan.fix.btr-status-root .kslots .set { height: 26px; padding: 0 8px; font-size: 12px; }
+.btr-status-root .ksample { margin-top: 4px; font-size: 17px; line-height: 1.45; overflow-wrap: anywhere; word-break: keep-all; }
+.btr-status-root .kcustom { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px 10px; border-top: 1px solid var(--hair); }
+.btr-status-root .skept > .input { margin-top: 8px; }
+.btr-status-root .skept-list { margin-top: 8px; }
+.btr-status-root .skept-list .line .k { flex: 1; max-width: none; overflow-wrap: anywhere; }
+
+/* 지우기 확인: 화면 안에서 아래에서 올라오는 작은 판 */
+.btr-status-root .slayer { position: absolute; inset: 0 -16px -16px; z-index: 2; }
+.btr-status-root .sdim { position: absolute; inset: 0; background: color-mix(in srgb, var(--ink) 34%, transparent); }
+.btr-status-root .ssheet { position: absolute; left: 0; right: 0; bottom: 0; max-height: 100%; overflow-y: auto; padding: 14px 16px 16px; background: var(--paper); border-radius: 18px 18px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.btr-status-root .ssheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.btr-status-root .ssheet-head b { display: block; font-size: 15px; font-weight: 600; }
+.btr-status-root .ssheet-head small { display: block; font-size: 13px; color: var(--mute); }
+.btr-status-root .sx { flex: none; width: 32px; height: 32px; display: grid; place-items: center; color: var(--mute); font-size: 16px; }
+.btr-status-root .ssheet .note { margin: 0; }
+.btr-status-root .ssheet .btns { justify-content: flex-end; margin-top: 6px; }
+.btr-status-root .keep { min-height: 36px; }
+.btr-status-root .chk .fa-solid { font-size: 10px; line-height: 1; }
+
+/* 글꼴 무리가 펴지고 접힐 때: 다른 줄의 펼침과 같은 움직임(높이와 흐림, .18초) */
+.btr-status-root .kfold { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .18s ease, opacity .18s ease; }
+.btr-status-root .kfold.on { grid-template-rows: 1fr; opacity: 1; }
+.btr-status-root .kfold > div { min-height: 0; overflow: hidden; }

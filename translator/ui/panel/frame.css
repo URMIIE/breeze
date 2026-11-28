@@ -1,0 +1,94 @@
+/* 번역기 판의 틀(frame.js). 모습(면, 줄, 머리, 닫기)은 common.css 의 시안 클래스(.page · .pop · .head · .x · .lcol · .rcol · .body)가 주고,
+   여기에는 실제 화면에 띄우는 데 필요한 것(자리, 크기, 스크롤, 움직임)과 시안이 틀 요소에 인라인으로 준 값만 둔다. */
+.btr-frame {
+    position: fixed;
+    inset: 0;
+    /* 화면 크기를 직접 준다: 테마가 html 에 transform 을 걸면 fixed 가 화면이 아니라 html 상자(높이가 거의 0)를 기준으로 잡혀
+       휴대폰 판의 높이가 1px 이 됐다 */
+    width: 100vw;
+    height: 100dvh;
+    /* 설정 창(10100) 위: 그 창의 번역 칸에서 이 판을 열면 창 뒤에 그려져 안 열린 것처럼 보였다.
+       다른 확장이 화면에 띄워 두는 버튼(z-index 99980 · 190만 · 200만)보다도 위: 휴대폰에서 판의 목록과 아래 줄을 가렸다.
+       실리태번 알림은 판이 열린 동안 이보다 위로 올린다(open.js raiseToasts). 고르는 창(dialog)은 늘 맨 위 층이라 가리지 않는다 */
+    z-index: 2147483000;
+    pointer-events: none;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink);
+}
+.btr-frame .btr-frame-dim { pointer-events: auto; }
+.btr-frame-pc .btr-frame-dim, .btr-frame-pc .btr-frame-grip { display: none; }
+
+.btr-frame .btr-frame-panel { pointer-events: auto; overflow: hidden; outline: none; color: var(--ink); }
+/* 휴대폰: 위를 조금 남기고 아래에서 올라오는 판(시안 top 8) */
+.btr-frame-phone .btr-frame-panel { top: max(8px, env(safe-area-inset-top)); }
+/* PC: 옮기고 크기를 바꾸는 창(자리와 크기는 frame.js 가 정한다) */
+.btr-frame-pc .btr-frame-panel { resize: both; min-width: 340px; min-height: 360px; }
+
+/* 옆 가장자리: 끌면 폭만 바뀐다. 보이는 것 없이 커서만 바뀐다. 오른쪽 아래 모서리의 크기 바꾸는 곳을 덮지 않게 그 위에서 끝난다 */
+.btr-frame .btr-frame-edge { position: absolute; top: 14px; bottom: 18px; width: 6px; z-index: 2; cursor: ew-resize; touch-action: none; }
+.btr-frame .btr-frame-edge[data-edge="left"] { left: 0; }
+.btr-frame .btr-frame-edge[data-edge="right"] { right: 0; }
+.btr-frame-phone .btr-frame-edge { display: none; }
+
+/* 머리: PC 는 가장자리 여백 24(시안 '머리 20 24 16', 닫기 24 x 24) */
+.btr-frame .btr-frame-head { min-height: 44px; }
+.btr-frame-pc .btr-frame-head { padding: 20px 24px 16px; min-height: 0; cursor: move; touch-action: none; user-select: none; }
+.btr-frame-pc .btr-frame-x { width: 24px; height: 24px; }
+.btr-frame .btr-frame-title { min-width: 0; flex: 1; }
+.btr-frame .btr-frame-title b { display: block; }
+.btr-frame .btr-frame-head button { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: var(--mute); cursor: pointer; flex: none; display: grid; place-items: center; }
+.btr-frame .btr-frame-back { width: 36px; height: 40px; margin-left: -12px; font-size: 16px; }
+
+.btr-frame .btr-frame-cols { flex: 1; min-height: 0; display: flex; }
+.btr-frame .btr-frame-view { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.btr-frame .btr-frame-scroll { flex: 1; min-height: 0; overflow-y: auto !important; overscroll-behavior: contain; scrollbar-width: thin; }
+.btr-frame .btr-frame-foot { flex: none; padding: 8px 16px 12px; }
+.btr-frame .btr-frame-foot:empty { display: none; }
+/* 통짜 화면: 머리 아래를 다 차지하는 상자 하나. 스크롤과 맨 아래 줄은 화면이 그린다 */
+.btr-frame .btr-frame-box { flex: 1; min-height: 0; overflow: hidden; }
+
+/* 두 칸(넓은 PC 창): 왼쪽 286 에 첫 화면, 오른쪽에 누른 화면. 시안 값: 왼쪽 칸 여백 0 20 24 24, 오른쪽 칸 0 24 24 4 */
+.btr-frame-split .btr-frame-cols { display: grid; grid-template-columns: 286px minmax(0, 1fr); }
+.btr-frame-split .btr-frame-view { grid-row: 1; grid-column: 2; }
+.btr-frame-split .btr-frame-left { grid-column: 1; }
+.btr-frame-split .btr-frame-scroll.lcol { padding: 0 20px 24px 24px; }
+.btr-frame-split .btr-frame-scroll.rcol { padding: 0 24px 24px 4px !important; }
+/* 왼쪽 칸은 첫 화면의 덩이들이 세로로 놓이고 맨 아래 두 줄이 바닥에 붙는다(시안 .lcol 이 flex 세로): 틀의 안쪽 상자는 없는 것으로 친다 */
+.btr-frame .btr-frame-scroll.lcol > .btr-frame-body, .btr-frame .btr-frame-scroll.lcol .btr-home { display: contents; }
+/* 좁은 PC 창(한 칸): 휴대폰과 같은 한 줄 구조, 가장자리만 24 */
+.btr-frame-pc:not(.btr-frame-split) .btr-frame-scroll.body { padding: 0 24px 24px; }
+
+/* 움직임: 판이 열리고 닫힐 때, 화면이 바뀔 때. 흐려지며 살짝 미끄러진다(자리와 투명도만 바꿔 안의 줄 폭은 그대로다) */
+.btr-frame .btr-frame-dim { animation: btr-frame-fade .18s ease both; }
+.btr-frame-pc .btr-frame-panel { animation: btr-frame-pop .18s cubic-bezier(.2, .7, .2, 1) both; }
+.btr-frame-phone .btr-frame-panel { animation: btr-frame-rise .2s cubic-bezier(.2, .7, .2, 1) both; }
+.btr-frame.btr-frame-out { pointer-events: none; }
+.btr-frame.btr-frame-out .btr-frame-panel { pointer-events: none; }
+.btr-frame.btr-frame-out .btr-frame-dim { animation: btr-frame-fade .15s ease reverse both; }
+.btr-frame-pc.btr-frame-out .btr-frame-panel { animation: btr-frame-pop .15s ease reverse both; }
+.btr-frame-phone.btr-frame-out .btr-frame-panel { animation: btr-frame-rise .15s ease reverse both; }
+.btr-frame .btr-frame-view.btr-frame-in { animation: btr-frame-in .18s cubic-bezier(.2, .7, .2, 1) both; }
+.btr-frame .btr-frame-view.btr-frame-inback { animation: btr-frame-inback .18s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes btr-frame-fade { from { opacity: 0; } }
+@keyframes btr-frame-pop { from { opacity: 0; transform: translateY(6px); } }
+@keyframes btr-frame-rise { from { opacity: 0; transform: translateY(24px); } }
+@keyframes btr-frame-in { from { opacity: 0; transform: translateX(10px); } }
+@keyframes btr-frame-inback { from { opacity: 0; transform: translateX(-10px); } }
+@media (prefers-reduced-motion: reduce) {
+    .btr-frame .btr-frame-dim, .btr-frame .btr-frame-panel, .btr-frame .btr-frame-view { animation: none !important; }
+}
+
+/* 왼쪽 칸(첫 화면)이 칸 높이보다 길면: 덩이들이 줄어들지 않고(flex 의 기본 줄어듦에 묶음의 overflow:hidden 이 겹쳐 용어집 줄들이 높이 0 으로
+   눌려 머리만 보였다) 칸 안에서 굴러간다. 아래에 더 있으면 칸 바닥을 흐리게 덮어 굴릴 수 있다는 것을 보인다(맨 아래까지 굴리면 사라진다) */
+/* 용어집 덩이는 겉 상자가 없는 것으로 쳐져(display:contents) 그 안의 제목과 묶음이 바로 칸의 아이가 된다: 그 둘도 줄어들지 않게 */
+.btr-frame .btr-frame-scroll.lcol .btr-home > *, .btr-frame .btr-frame-scroll.lcol .btr-home-terms > * { flex-shrink: 0; }
+.btr-frame .btr-frame-scroll.lcol::after { content: ''; position: sticky; bottom: 0; flex: none; display: block; height: 24px; margin: 0 -20px -24px -24px; background: linear-gradient(transparent, var(--paper)); pointer-events: none; opacity: 0; animation: btr-more-below linear both; animation-timeline: scroll(nearest block); }
+@keyframes btr-more-below { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
+/* 오른쪽 칸 이름 줄의 뒤로 버튼(안쪽 화면에 들어갔을 때): 이름 바로 앞, 머리의 뒤로 버튼과 같은 모양 */
+.btr-frame .rt:has(> .btr-frame-rtback) { justify-content: flex-start; align-items: center; gap: 2px; }
+.btr-frame .rt > .btr-frame-rtback { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin: 0 0 0 -6px; padding: 0; border: 0; background: none; color: var(--mute); font: inherit; cursor: pointer; }
+.btr-frame .rt > .btr-frame-rtback svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+/* 나온 사람들을 다 편 목록: 사람이 많아도 첫 화면이 끝없이 길어지지 않게 다섯 줄 반 높이까지만 보이고 그 안에서 굴린다(반 줄이 걸쳐 보여 더 있는 것을 안다) */
+.btr-plan .btr-home-people-all { max-height: 300px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; border-radius: 11px 11px 0 0; }

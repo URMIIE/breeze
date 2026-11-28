@@ -311,6 +311,35 @@ function cleanup(container) {
     container.querySelectorAll('li.etk-pg-selectable').forEach(el => el.classList.remove('etk-pg-selectable'));
 }
 
+// 복제한 토글을 원본 그룹에: 그룹은 토글 id 로 묶는데 복제본은 새 id 라 그룹 밖(그룹 사이)에 따로 떴음.
+//   누가 복제하든 남는 꼴로 알아봄: 토글 하나만 새로 생겼고, 바로 위 토글이 그룹에 들어 있고, 내용이 그 토글과 같으면 그 그룹의 원본 바로 뒤에 넣음.
+//   프리셋을 바꾸거나 여러 토글을 한꺼번에 가져온 때는(하나가 아니게 늘어남) 손대지 않음. 목록 길이가 그대로면 비교 없이 바로 돌아감
+let seenOrder = null;
+function adoptCopies(data) {
+    const pm = promptManager;
+    const order = pm?.activeCharacter ? pm.getPromptOrderForCharacter(pm.activeCharacter) : null;
+    if (!Array.isArray(order)) return false;
+    const key = presetKey(), who = pm.activeCharacter?.id ?? null, prev = seenOrder;
+    const same = prev && prev.key === key && prev.who === who;
+    if (same && prev.len === order.length) return false;
+    seenOrder = { key, who, len: order.length, ids: new Set(order.map(x => x.identifier)) };
+    if (!same || order.length !== prev.len + 1) return false;
+    const fresh = order.filter(x => !prev.ids.has(x.identifier));
+    if (fresh.length !== 1) return false;
+    const i = order.indexOf(fresh[0]);
+    if (i < 1) return false;
+    const src = order[i - 1].identifier, id = fresh[0].identifier;
+    const g = data.groups.find(x => x.members.includes(src));
+    if (!g || data.groups.some(x => x.members.includes(id))) return false;
+    const a = pm.getPromptById(src), b = pm.getPromptById(id);
+    if (!a || !b || (a.content ?? '') !== (b.content ?? '')) return false;
+    // 내용이 빈 토글(구분 줄 등)은 내용만으로는 복제인지 알 수 없어 이름이 원본 이름을 품을 때만
+    if (!a.content && !String(b.name ?? '').includes(String(a.name ?? ''))) return false;
+    g.members.splice(g.members.indexOf(src) + 1, 0, id);
+    save();
+    return true;
+}
+
 function apply() {
     if (!live) return;
     // 드래그 중에는 건드리지 않음
@@ -366,6 +395,7 @@ function apply() {
         rememberOn();
 
         const data = presetData();
+        adoptCopies(data);
         const groups = data.groups;
         const groupOf = new Map();
         groups.forEach((g, gi) => g.members.forEach(id => groupOf.set(id, { g, gi })));
@@ -388,7 +418,7 @@ function apply() {
 
         // 그룹 보기 (그룹 안에 그룹 가능)
         const tree = makeTree(groups);
-        const ctx = { rowById, pos, tree };
+        const ctx = { rowById, pos, tree, emoCell: hasEmo(groups) };
         const topGroups = groups.filter(g => !tree.parentOf(g));
         // 내가 정한 순서: 큰 그룹을 정한 차례대로 목록 맨 위에, 그룹에 안 든 토글은 그 아래 실제 순서대로
         const custom = isCustomLayout();
@@ -966,6 +996,21 @@ function watchBar() {
 const spotLabel = s => ({ top: tr`above the list`, head: tr`next to the Prompts title`, side: tr`beside other extensions' rows`, bottom: tr`at the very bottom of the list` })[s] || s;
 
 /** 그룹 관계(상위/하위)를 다루는 도우미 */
+// 이름 앞 그림 문자(이모지)와 나머지. 그림 문자가 있는 이름 · 없는 이름이 섞이면 글자 시작 자리가 들쭉날쭉해서
+//   그림 문자를 고정 폭 칸에 따로 그려 맞춤(저장된 이름은 그대로). 칸에는 원래 띄움까지 넣어 글 전체(textContent)는 이름과 같게
+const EMO_HEAD = /^(\p{Extended_Pictographic}(?:\uFE0F|\p{Emoji_Modifier}|\u200D\p{Extended_Pictographic})*)(\s*)(\S[\s\S]*)$/u;
+function splitName(name) {
+    const text = String(name ?? ''), m = text.match(EMO_HEAD);
+    return m ? { emo: m[1], sep: m[2], rest: m[3] } : { emo: '', sep: '', rest: text };
+}
+const hasEmo = groups => groups.some(g => splitName(g.name).emo);
+/** 프롬프트 목록 그룹 머리의 이름 칸 안쪽: 그림 문자 칸(어느 그룹에든 그림 문자가 있으면 없는 이름도 빈 칸) + 나머지 */
+function nameHtml(name, emoCell) {
+    const { emo, sep, rest } = splitName(name);
+    if (!emoCell) return escapeHtml(name);
+    return `<span class="etk-pg-emo">${escapeHtml(emo + sep)}</span>${escapeHtml(rest)}`;
+}
+
 function makeTree(groups) {
     const byId = new Map(groups.map(g => [g.id, g]));
     const parentOf = g => {
@@ -1134,7 +1179,7 @@ function buildGroup(g, ctx, depth) {
     head.innerHTML = `
         <span class="etk-pg-caret fa-solid ${open ? 'fa-chevron-down' : 'fa-chevron-right'}"></span>
         ${subCount ? '<span class="etk-pg-folder fa-solid fa-folder-tree"></span>' : ''}
-        <span class="etk-pg-name">${escapeHtml(g.name)}</span>
+        <span class="etk-pg-name">${nameHtml(g.name, ctx.emoCell)}</span>
         <span class="etk-pg-btn etk-pg-one${exclusive ? '' : ' etk-pg-one-off'}" role="button" tabindex="0" aria-pressed="${exclusive}" title="${escapeHtml(exclusive ? tr`Only one toggle in this group can be on. Click to turn off.` : tr`Click to allow only one toggle on in this group`)}">${escapeHtml(tr`Pick 1`)}</span>
         ${groupSets(g).length ? `<span class="etk-pg-btn etk-pg-setchip" role="button" tabindex="0" title="${escapeHtml((activeSetOf(g)?.name || tr`All`) + ' · ' + tr`Toggle set to turn on. Click to change.`)}">${escapeHtml(activeSetOf(g)?.name || tr`All`)}<i class="fa-solid fa-caret-down"></i></span>` : ''}
         <span class="etk-pg-count">${enabledCount}/${items.length}</span>
@@ -2665,6 +2710,121 @@ function fitEditorHeight(root) {
     }
 }
 
+// '이 그룹 편집' 창 크기 바꾸기(PC): 왼쪽 · 오른쪽 · 아래 가장자리와 아래 두 모서리를 끌어서, 크기는 브라우저에 기억(breeze 설정 창과 같은 방식).
+//   실리태번 창은 화면 가운데에 놓이므로 가장자리를 끈 만큼 양쪽이 같이 늘어남 → 끈 거리의 두 배로 바꿔야 가장자리가 마우스를 따라옴.
+//   좁은 화면(700px 아래)은 지금 그대로(크기 손잡이 없음, 기억한 크기도 안 씀)
+const ED_SIZE_KEY = 'breeze.pg.editorSize';
+const ED_MIN_W = 760, ED_MIN_H = 460;   // 이보다 좁으면 왼쪽 그룹 이름 칸이 버튼들에 밀려 안 보이고, 낮으면 아래 저장 버튼이 가려짐(640 폭에서 그룹 이름이 사라진 것을 그림으로 봄)
+const edNarrow = () => matchMedia('(max-width: 700px)').matches;
+const readEdSize = () => { try { return JSON.parse(localStorage.getItem(ED_SIZE_KEY) || 'null'); } catch { return null; } };
+const writeEdSize = (size) => { try { localStorage.setItem(ED_SIZE_KEY, JSON.stringify(size)); } catch { /* 저장소가 막혀 있으면 이번만 */ } };
+const edMax = () => ({ w: innerWidth - 32, h: innerHeight - 32 });   // 실리태번 창의 최대(화면 - 2em)와 같게
+function applyEdSize(popup, size) {
+    if (!size || edNarrow()) {
+        ['width', 'max-width', 'height', 'max-height'].forEach(k => popup.style.removeProperty(k));
+        popup.classList.remove('etk-pg-be-sized');
+        return;
+    }
+    const m = edMax();
+    const w = Math.max(Math.min(ED_MIN_W, m.w), Math.min(size.w, m.w));
+    const h = Math.max(Math.min(ED_MIN_H, m.h), Math.min(size.h, m.h));
+    // 이 창 폭은 CSS 가 !important 로 정해 둬서 같은 힘으로 덮음
+    popup.style.setProperty('width', `${w}px`, 'important');
+    popup.style.setProperty('max-width', 'none', 'important');
+    popup.style.setProperty('height', `${h}px`, 'important');
+    popup.style.setProperty('max-height', 'none', 'important');
+    popup.classList.add('etk-pg-be-sized');
+}
+function wireEditorResize(root) {
+    const popup = root.closest('.popup');
+    if (!popup || popup.querySelector('.etk-pg-rz')) return;
+    applyEdSize(popup, readEdSize());
+    for (const edge of ['w', 'e', 's', 'sw', 'se']) {
+        const grip = document.createElement('div');
+        grip.className = `etk-pg-rz etk-pg-rz-${edge}`;
+        if (edge === 'se') grip.title = tr`Drag to resize`;
+        popup.append(grip);
+        grip.addEventListener('pointerdown', ev => {
+            if (ev.button !== 0 || edNarrow()) return;
+            ev.preventDefault(); ev.stopPropagation();
+            const r = popup.getBoundingClientRect(), x0 = ev.clientX, y0 = ev.clientY;
+            // 가운데 놓인 쪽(가로 · 세로)은 두 배로
+            const kx = Math.abs((r.left + r.right) / 2 - innerWidth / 2) < 4 ? 2 : 1;
+            const ky = Math.abs((r.top + r.bottom) / 2 - innerHeight / 2) < 4 ? 2 : 1;
+            grip.setPointerCapture?.(ev.pointerId);
+            popup.classList.add('etk-pg-be-resizing');
+            const move = e2 => {
+                const dx = e2.clientX - x0, dy = e2.clientY - y0;
+                const w = edge.includes('e') ? r.width + dx * kx : edge.includes('w') ? r.width - dx * kx : r.width;
+                const h = edge.includes('s') ? r.height + dy * ky : r.height;
+                applyEdSize(popup, { w, h });
+            };
+            const up = () => {
+                grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); grip.removeEventListener('pointercancel', up);
+                popup.classList.remove('etk-pg-be-resizing');
+                const b = popup.getBoundingClientRect();
+                writeEdSize({ w: Math.round(b.width), h: Math.round(b.height) });
+            };
+            grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up); grip.addEventListener('pointercancel', up);
+        });
+    }
+}
+
+// 토글 이름이 태번 헬퍼 스크립트 안의 사전으로 바뀌어 보이는지: 켜진 스크립트(전역 · 이 프리셋) 본문에 "원래 이름": 꼴이 있으면 그 스크립트 이름.
+//   그런 사전은 스크립트 코드 속 글이고 그 스크립트를 만든 도구가 다시 넣을 때 통째로 새로 써서, 여기서 고치면 망가지거나 덮어써짐 → 고치지 않고 알려 줌
+//   편집 창을 열 때 모든 줄을 한 번에 가려야 해서(연필을 흐리게 할지), 줄마다 스크립트 본문 전부(수 MB)를 훑지 않고
+//   켜진 스크립트 본문을 한 번만 훑어 이 줄들의 "이름": 꼴이 있는지 모아 둠. 스크립트 본문 · 이름들이 그대로면 모은 것을 다시 씀
+let scriptKeyCache = null;
+// 본문의 ": 자리마다 앞쪽 따옴표까지를 후보로. 이름 안 따옴표는 \" 로 적히므로 \ 가 붙은 따옴표는 지나쳐 더 앞 것까지 보되,
+//   가장 긴 이름보다 길어지면 멈춤(따옴표를 \" 로 적은 JSON 글이 통째로 든 스크립트에서 후보가 끝없이 길어져 창이 멈췄음)
+function collectKeys(text, name, needles, maxLen, found) {
+    for (let p = text.indexOf('":'); p !== -1; p = text.indexOf('":', p + 2)) {
+        let q = text.lastIndexOf('"', p - 1);
+        while (q !== -1 && p + 2 - q <= maxLen) {
+            const key = text.slice(q, p + 2);
+            if (needles.has(key) && !found.has(key)) found.set(key, name);
+            if (text[q - 1] !== '\\') break;
+            q = text.lastIndexOf('"', q - 1);
+        }
+    }
+}
+function scriptRenamer(names) {
+    const th = extension_settings.tavern_helper?.script;
+    if (!th) return () => null;
+    const flat = (items, on) => (items || []).flatMap(x => x?.type === 'folder' ? flat(x.scripts, on && x.enabled !== false) : [{ name: x?.name, content: x?.content, on: on && x?.enabled !== false }]);
+    const enabled = th.enabled || {};
+    const pool = [];
+    if (enabled.global !== false) pool.push(...flat(th.scripts, true));
+    if ((enabled.presets || []).includes(presetKey())) pool.push(...flat(oai_settings.extensions?.tavern_helper?.scripts, true));
+    const used = pool.filter(x => x.on && typeof x.content === 'string');
+    const needleOf = raw => JSON.stringify(String(raw).trim()) + ':';
+    const needles = new Set(names.filter(Boolean).map(needleOf));
+    const sig = [...needles].join('\n');
+    const same = scriptKeyCache && scriptKeyCache.sig === sig && scriptKeyCache.used.length === used.length
+        && scriptKeyCache.used.every((x, i) => x.content === used[i].content && x.name === used[i].name);
+    if (!same) {
+        const found = new Map(), maxLen = Math.max(0, ...[...needles].map(x => x.length));
+        for (const x of used) collectKeys(x.content, x.name, needles, maxLen, found);
+        scriptKeyCache = { used, sig, found };
+    }
+    const { found } = scriptKeyCache;
+    return raw => raw ? found.get(needleOf(raw)) ?? null : null;
+}
+
+// 실리태번 길(설정 저장)만으로는 프리셋 파일의 이름이 그대로라, 다른 프리셋을 골랐다 돌아오면 옛 이름으로 돌아감.
+//   그룹을 프리셋 파일에 적을 때와 같은 길로 그 파일의 이 토글 이름 칸만 바꿈(저장 안 한 다른 프리셋 수정은 파일에 넣지 않음)
+async function renameInPresetFile(id, name) {
+    try {
+        const pm = getPresetManager('openai'), preset = pm?.getCompletionPresetByName?.(presetKey());
+        const entry = preset?.prompts?.find(x => x.identifier === id);
+        if (!entry || entry.name === name) return;
+        entry.name = name;
+        await pm.savePreset(presetKey(), preset, { skipUpdate: true });
+    } catch (err) {
+        console.warn('[Prompt Folders] rename in preset file failed', err);
+    }
+}
+
 async function openGroupEditor({ focusId = null, addNew = false, newParent = null, auto = false, sources = null, scopeId = null } = {}) {
     const pm = promptManager;
     if (!pm?.activeCharacter) return;
@@ -2709,9 +2869,12 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     const custom = new Set();   // 안에서 순서를 직접 바꾼 그룹 id
 
     const root = document.createElement('div');
+    const scoped = !!scopeId;   // '이 그룹 편집'으로 열었는지 (창 모양 · 크기 기억). 다루는 범위(scopeId)는 창 안에서 위 · 아래 그룹으로 바꿀 수 있음
+    const scopeStart = scopeId;
     root.className = 'etk-pg-editor etk-pg-be' + (scopeId ? ' etk-pg-be-scope' : '');
     root.innerHTML = `
         <h3 class="etk-pg-ed-title">${e(imp ? (imp.length === 1 && imp[0].key === '\u0000box' ? tr`Bring groups from 柏宝箱 (BaiBai Box)` : tr`Bring groups from another preset`) : auto ? tr`Auto-group` : scopeId ? tr`Edit this group` : tr`Edit groups`)}</h3>
+        ${scoped ? `<nav class="etk-pg-be-crumbs" aria-label="${e(tr`Group to edit`)}"></nav>` : ''}
         <div class="etk-pg-ed-summary"></div>
         ${imp ? `${imp.length > 1 ? `<select class="text_pole etk-pg-imp-from" aria-label="${e(tr`Bring from`)}">${impOptions()}</select>` : ''}
         <div class="etk-pg-imp-stats"></div>` : ''}
@@ -2737,16 +2900,18 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
                     ${auto ? `<button type="button" class="etk-pg-ed-chip" data-f="changed" role="radio">${e(tr`Changed this time`)}</button>` : ''}
                 </div>
                 <div class="etk-pg-be-actions">
-                    <span class="etk-pg-be-hint">${e(matchMedia('(pointer: coarse)').matches ? tr`Pick many: long-press, then drag` : tr`Pick many: drag · Shift+click for a range`)}</span>
+                    <span class="etk-pg-be-hint">${e(matchMedia('(pointer: coarse)').matches ? tr`Pick many: long-press, then drag` : tr`Pick many: drag up or down · Shift+click for a range · Drag onto a group on the left to move`)}</span>
                     <span class="etk-pg-ed-count"></span>
                     <button type="button" class="menu_button etk-pg-be-put"></button>
                     <button type="button" class="menu_button etk-pg-be-out">${e(tr`Remove from group`)}</button>
                     <button type="button" class="etk-pg-tb etk-pg-be-clear">${e(tr`Clear`)}</button>
                 </div>
+                <div class="etk-pg-be-griphint" hidden><i class="fa-solid fa-grip-lines"></i><span>${e(tr`Drag to change the order inside this group (for toggles in a sub-group, pick that group on the left)`)}</span></div>
                 <ul class="etk-pg-ed-list" role="listbox" aria-multiselectable="true"></ul>
             </section>
         </div>`;
     const treeEl = root.querySelector('.etk-pg-be-tree'), list = root.querySelector('.etk-pg-ed-list');
+    const crumbs = root.querySelector('.etk-pg-be-crumbs');
     const count = root.querySelector('.etk-pg-ed-count'), putBtn = root.querySelector('.etk-pg-be-put'), outBtn = root.querySelector('.etk-pg-be-out');
     const summary = root.querySelector('.etk-pg-ed-summary');
     // 한자 · 가나 그룹 이름 → 한국어 (다른 도구에서 가져온 그룹, 중국어 프리셋에서 자동으로 지은 이름 등)
@@ -2834,6 +2999,34 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     };
     const colorOf = g => { const t = tree(); return groupColor(g, t.indexOf(g), t); };
 
+    // 제목 아래 그룹 길(전체 › 위 그룹 › … › 지금 그룹): 이름을 누르면 그 그룹을 다루는 범위로 그 자리에서 바뀜.
+    //   하위 그룹에서 연 창에서 위 그룹을 손보려고 창을 닫고 다시 열어야 했음. 초안(draft)은 늘 프리셋의 그룹 전부라 범위는 보이는 것만 바꿈
+    function renderCrumbs() {
+        if (!crumbs) return;
+        const t = tree();
+        const end = draft.find(x => x.id === scopeStart) || draft.find(x => x.id === scopeId) || null;
+        const steps = [{ id: '', name: tr`All groups` }, ...(end ? t.path(end).map(g => ({ id: g.id, name: g.name || tr`(no name)` })) : [])];
+        const cur = steps.findIndex(x => x.id === (scopeId || ''));
+        crumbs.innerHTML = `<span class="etk-pg-be-crumbs-lead">${e(tr`Click a name to edit that group:`)}</span>`
+            + steps.map((x, i) => {
+                const sep = i ? '<span class="etk-pg-be-crumb-sep">›</span>' : '';
+                if (i === cur) return `${sep}<span class="etk-pg-be-crumb etk-pg-be-crumb-now" aria-current="true">${e(x.name)}</span>`;
+                const up = i === cur - 1 ? '<i class="fa-solid fa-arrow-turn-up"></i>' : '';
+                return `${sep}<button type="button" class="etk-pg-be-crumb" data-scope="${e(x.id)}">${up}${e(x.name)}</button>`;
+            }).join('');
+    }
+    function setScope(id) {
+        scopeId = id || null;
+        const t = tree(), top = draft.find(x => x.id === scopeId);
+        const picked = draft.find(x => x.id === sel);
+        // 범위를 좁혀서 고른 그룹이 범위 밖이 되면 그 범위의 맨 위 그룹을 고름 (넓힐 땐 그대로)
+        if (top && picked && !t.path(picked).includes(top)) sel = top.id;
+        renderTree(); refreshTags(); refilter();
+    }
+    crumbs?.addEventListener('click', ev => {
+        const b = ev.target.closest('button[data-scope]');
+        if (b) setScope(b.dataset.scope);
+    });
     function renderTree() {
         updateTrans();
         const t = tree();
@@ -2845,7 +3038,7 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
             return `<li class="etk-pg-be-g${sel === g.id ? ' etk-pg-be-sel' : ''}${top ? '' : ' etk-pg-be-sub'}" data-g="${e(g.id)}" role="option" aria-selected="${sel === g.id}" style="--etk-pg-color:${colorOf(g)};--etk-pg-depth:${depth}">
                 <span class="etk-pg-be-grip" title="${e(tr`Drag to reorder`)}"><i class="fa-solid fa-grip-lines"></i></span>
                 <span class="etk-pg-be-dot"></span>
-                <input type="text" class="text_pole etk-pg-be-name" value="${e(g.name)}" placeholder="${e(tr`Group name`)}" aria-label="${e(tr`Group name`)}">
+                <span class="etk-pg-be-namebox"><span class="etk-pg-be-emo" aria-hidden="true">${e(splitName(g.name).emo)}</span><input type="text" class="text_pole etk-pg-be-name" value="${e(splitName(g.name).rest)}" placeholder="${e(tr`Group name`)}" aria-label="${e(tr`Group name`)}"></span>
                 <span class="etk-pg-be-n">${auto && mode === 'free' ? (isOld(g) ? (() => { const k = g.members.filter(id => origOf.get(id) !== g.id).length; return k ? `<span class="etk-pg-new-badge" title="${e(tr`Toggles added to this group this time`)}">+${k}</span>` : ''; })() : `<span class="etk-pg-new-badge etk-pg-new-word" title="${e(tr`A group made this time`)}">${e(tr`New`)}</span>`) : ''}${n}</span>
                 ${scopeRoot && g === scopeRoot ? '<span class="etk-pg-be-mv"></span>' : `<span class="etk-pg-be-mv"><button type="button" class="etk-pg-be-ic" data-act="up" title="${e(tr`Move group up`)}" aria-label="${e(tr`Move group up`)}"><i class="fa-solid fa-chevron-up"></i></button><button type="button" class="etk-pg-be-ic" data-act="down" title="${e(tr`Move group down`)}" aria-label="${e(tr`Move group down`)}"><i class="fa-solid fa-chevron-down"></i></button></span>`}
                 <button type="button" class="etk-pg-be-ic" data-act="sub" title="${e(tr`New group inside`)}" aria-label="${e(tr`New group inside`)}"><i class="fa-solid fa-folder-plus"></i></button>
@@ -2855,6 +3048,7 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
         };
         const free = order.filter(x => !groupOf(x.id)).length;
         const branch = (g, depth, seen = new Set()) => seen.has(g) ? '' : (seen.add(g), row(g, depth) + t.childrenOf(g).sort(bySpot).map(k => branch(k, depth + 1, seen)).join(''));
+        treeEl.classList.toggle('etk-pg-be-emo-on', hasEmo(draft));
         treeEl.innerHTML = tops.map(g => branch(g, 0)).join('')
             + `<li class="etk-pg-be-g etk-pg-be-none${sel === '' ? ' etk-pg-be-sel' : ''}" data-g="" role="option" aria-selected="${sel === ''}"><span class="etk-pg-be-grip etk-pg-be-grip-none"></span><span class="etk-pg-be-dot"></span><span class="etk-pg-be-label">${e(tr`Not in a group`)}</span><span class="etk-pg-be-n">${free}</span></li>`;
         if (!draft.length) treeEl.insertAdjacentHTML('afterbegin', `<li class="etk-pg-be-empty">${e(tr`No groups yet. Add one with + New group.`)}</li>`);
@@ -2893,6 +3087,24 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     treeEl.addEventListener('pointerup', endGDrag);
     treeEl.addEventListener('pointercancel', endGDrag);
     const focusName = id => setTimeout(() => treeEl.querySelector(`[data-g="${CSS.escape(id)}"] .etk-pg-be-name`)?.focus(), 30);
+    // 그림 문자는 따로 그려 두고, 이름을 고치는 동안만 칸에 이름 전체(그림 문자 포함)를 넣음 → 그림 문자도 고칠 수 있게
+    treeEl.addEventListener('focusin', ev => {
+        const inp = ev.target.closest('.etk-pg-be-name'), box = inp?.parentElement;
+        const g = inp && draft.find(x => x.id === inp.closest('[data-g]').dataset.g);
+        if (!g || box.classList.contains('etk-pg-be-editing')) return;
+        box.classList.add('etk-pg-be-editing');
+        inp.value = g.name;
+    });
+    treeEl.addEventListener('focusout', ev => {
+        const inp = ev.target.closest('.etk-pg-be-name'), box = inp?.parentElement;
+        const g = inp && draft.find(x => x.id === inp.closest('[data-g]').dataset.g);
+        if (!g || !box.classList.contains('etk-pg-be-editing')) return;
+        box.classList.remove('etk-pg-be-editing');
+        const { emo, rest } = splitName(g.name);
+        box.querySelector('.etk-pg-be-emo').textContent = emo;
+        inp.value = rest;
+        treeEl.classList.toggle('etk-pg-be-emo-on', hasEmo(draft));
+    });
     treeEl.addEventListener('input', ev => {
         const inp = ev.target.closest('.etk-pg-be-name'); if (!inp) return;
         const g = draft.find(x => x.id === inp.closest('[data-g]').dataset.g); if (g) { g.name = inp.value; refreshTags(); updateActions(); }
@@ -2927,23 +3139,51 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     });
     root.querySelector('.etk-pg-be-add').addEventListener('click', () => { const g = addGroup(scopeId && draft.some(x => x.id === scopeId) ? scopeId : null); if (selected.size) putInto(g); renderTree(); refilter(); focusName(g.id); });
 
+    // 토글 이름 바꾸기: 줄을 누르는 건 고르기(체크)라 이름 바꾸기는 줄 끝 연필 버튼으로만.
+    //   예전엔 한 줄만 체크하면 그 줄에 연필 · 못 고치는 까닭이 생겨, 고르기만 하려 해도 누를 때마다 떴음.
+    //   화면 이름이 스크립트 안 사전에서 온 것 등 못 고치는 줄은 연필을 흐리게 두고, 누르면 까닭을 그 줄 아래에 펼침
+    const scripted = scriptRenamer(order.map(it => getPrompt(it.id)?.name));
+    const blockWhy = new Map();
+    const renameBlock = id => {
+        if (!blockWhy.has(id)) {
+            const p = getPrompt(id), from = p && !p.marker ? scripted(p.name) : null;
+            blockWhy.set(id, !p ? tr`This toggle is not in the preset.` : p.marker ? tr`This is a SillyTavern slot, so its name can't be changed.` : from ? tr`This name is shown by the "${from}" script. Its names are written inside the script's code, so they can't be changed here.` : '');
+        }
+        return blockWhy.get(id);
+    };
+    const renameButton = id => {
+        const why = renameBlock(id);
+        return `<button type="button" class="etk-pg-ed-rename${why ? ' etk-pg-ed-rename-off' : ''}" title="${e(why || tr`Rename toggle`)}" aria-label="${e(why || tr`Rename toggle`)}"${why ? ' aria-expanded="false"' : ''}><i class="fa-solid fa-pencil"></i></button>`;
+    };
     // 토글 목록 — 고르기는 예전 편집 창과 같음 (누르기 · Shift 범위 · 끌어 칠하기 · 폰은 길게 누른 뒤 끌기)
     for (const it of order) {
         const li = document.createElement('li');
         li.className = 'etk-pg-ed-row' + (it.divider ? ' etk-pg-ed-div' : '') + (it.on ? '' : ' etk-pg-ed-off');
         li.dataset.id = it.id;
         li.setAttribute('role', 'option');
-        li.innerHTML = `<span class="etk-pg-ed-grip" title="${e(tr`Drag to reorder`)}"><i class="fa-solid fa-grip-lines"></i></span><input type="checkbox" tabindex="-1"><span class="etk-pg-ed-pos">#${it.pos}</span><span class="etk-pg-ed-name-text">${e(it.name)}</span><span class="etk-pg-ed-how" hidden></span><span class="etk-pg-new-badge etk-pg-new-word etk-pg-ed-new" hidden>${e(tr`New`)}</span><span class="etk-pg-ed-tag"></span>`;
+        li.innerHTML = `<span class="etk-pg-ed-grip" title="${e(tr`Drag to reorder`)}"><i class="fa-solid fa-grip-lines"></i></span><input type="checkbox" tabindex="-1"><span class="etk-pg-ed-pos">#${it.pos}</span><span class="etk-pg-ed-name-text">${e(it.name)}</span><small class="etk-pg-ed-from" hidden></small><span class="etk-pg-ed-how" hidden></span><span class="etk-pg-new-badge etk-pg-new-word etk-pg-ed-new" hidden>${e(tr`New`)}</span><span class="etk-pg-ed-tag"></span>${renameButton(it.id)}`;
         list.append(li);
     }
     const rows = [...list.children];
     const rowOf = new Map(rows.map(li => [li.dataset.id, li]));
+    // 그룹 길: 한 덩이 글로 두면 줄 끝에서 잘려 정작 토글이 든 마지막 그룹 이름이 안 보였음 → 위 그룹들과 마지막 이름을 나눠, 좁으면 위 그룹들만 줄임
+    const fillTag = (tag, names) => {
+        const up = document.createElement('span'), end = document.createElement('span');
+        up.className = 'etk-pg-ed-tag-up';
+        up.textContent = names.length > 1 ? names.slice(0, -1).join(' › ') + ' › ' : '';   // 끝 띄움까지 글로 둬서 조각 사이가 모두 같은 띄움
+        up.hidden = names.length < 2;
+        end.className = 'etk-pg-ed-tag-last';
+        end.textContent = names.at(-1);
+        tag.replaceChildren(up, end);
+        tag.title = names.join(' › ');
+    };
     function refreshTags() {
         const t = tree();
+        renderCrumbs();
         rows.forEach(li => {
             const g = groupOf(li.dataset.id), tag = li.querySelector('.etk-pg-ed-tag');
             tag.hidden = !g;
-            if (g) { tag.style.setProperty('--etk-pg-color', colorOf(g)); tag.textContent = t.path(g).map(y => y.name || tr`(no name)`).join(' › '); }
+            if (g) { tag.style.setProperty('--etk-pg-color', colorOf(g)); fillTag(tag, t.path(g).map(y => y.name || tr`(no name)`)); }
             const how = g && impRes?.how[li.dataset.id], hw = li.querySelector('.etk-pg-ed-how');
             hw.hidden = !how;
             hw.textContent = how === 'name' ? tr`by name` : how === 'placed' ? tr`new toggle` : '';
@@ -2968,6 +3208,50 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
         outBtn.disabled = !selected.size;
         root.querySelector('.etk-pg-be-actions').classList.toggle('etk-pg-be-idle', !selected.size);
     }
+    // 못 고치는 줄의 흐린 연필: 까닭을 그 줄 아래에 펼치고 한 번 더 누르면 접음 (휴대폰엔 마우스 올리기가 없어 title 만으론 안 보임)
+    function toggleWhy(li) {
+        const btn = li.querySelector('.etk-pg-ed-rename'), from = li.querySelector('.etk-pg-ed-from');
+        const open = from.hidden;
+        from.textContent = open ? renameBlock(li.dataset.id) : '';
+        from.hidden = !open;
+        li.classList.toggle('etk-pg-ed-why', open);
+        btn.setAttribute('aria-expanded', String(open));
+    }
+    // 실리태번이 프롬프트 편집 창에서 저장할 때와 같은 길: 이름을 바꾸고 목록을 다시 그린 뒤 저장 (그룹은 id 로 묶여 그대로)
+    function startRename(li) {
+        const id = li.dataset.id, p = getPrompt(id), nameEl = li.querySelector('.etk-pg-ed-name-text');
+        if (!p || renameBlock(id) || li.querySelector('.etk-pg-ed-name-input')) return;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'text_pole etk-pg-ed-name-input';
+        input.value = p.name ?? '';
+        input.setAttribute('aria-label', tr`Rename toggle`);
+        nameEl.hidden = true;
+        nameEl.after(input);
+        input.focus(); input.select();
+        let done = false;
+        const finish = keep => {
+            if (done) return; done = true;
+            const v = input.value.trim();
+            input.remove(); nameEl.hidden = false;
+            if (!keep || !v || v === p.name) return;
+            p.name = v;
+            nameEl.textContent = v;
+            const it = order[at.get(id)]; if (it) it.name = v;
+            promptManager.render();
+            promptManager.saveServiceSettings();
+            renameInPresetFile(id, v);
+        };
+        input.addEventListener('keydown', ev => {
+            if (ev.key === 'Enter' || ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); finish(ev.key === 'Enter'); }
+        });
+        input.addEventListener('blur', () => finish(true));
+    }
+    list.addEventListener('click', ev => {
+        const b = ev.target.closest('.etk-pg-ed-rename'); if (!b) return;
+        const li = b.closest('.etk-pg-ed-row');
+        if (b.classList.contains('etk-pg-ed-rename-off')) toggleWhy(li); else startRename(li);
+    });
     let last = null, paint = null, press = null;
     const changed = () => updateActions();
     const rangeTo = (idx, on) => { const [a, b] = [Math.min(last, idx), Math.max(last, idx)]; for (let i = a; i <= b; i++) if (!rows[i].hidden) setRow(rows[i], on); };
@@ -3002,6 +3286,7 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     list.addEventListener('pointerdown', ev => {
         const li = ev.target.closest('.etk-pg-ed-row');
         if (!li || ev.button !== 0) return;
+        if (ev.target.closest('.etk-pg-ed-rename, .etk-pg-ed-name-input')) return;   // 이름 바꾸기는 줄 고르기 · 끌기와 따로
         const idx = rows.indexOf(li);
         if (ev.pointerType !== 'mouse') {
             press = { li, idx, x: ev.clientX, y: ev.clientY, long: false };
@@ -3009,10 +3294,99 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
             return;
         }
         ev.preventDefault();
-        const on = !selected.has(li.dataset.id);
-        if (ev.shiftKey && last != null) rangeTo(idx, on); else { setRow(li, on); paint = on; }
+        const before = new Set(selected), on = !selected.has(li.dataset.id);
+        if (ev.shiftKey && last != null) rangeTo(idx, on); else { setRow(li, on); paint = on; startCarry(li, before, ev); }
         last = idx; changed();
     });
+    // 끌어서 옮기기(마우스만): 줄을 누른 채 위아래로 끌면 지금처럼 여러 줄 체크, 왼쪽 그룹 목록 쪽으로 목록을 벗어나면 옮기기로 바뀜.
+    //   누른 줄이 체크돼 있었으면 체크한 줄 전부, 아니면 누른 줄 하나만 옮김. 그룹 줄이 아닌 곳에 놓으면 체크 상태까지 누르기 전으로 되돌림
+    //   (휴대폰은 좌우가 좁아 위아래 칠하기와 구분이 안 되므로 넣지 않음. 터치는 위의 길게 누르기 길로만 감)
+    let carry = null;
+    function startCarry(li, before, ev) {
+        carry = { li, before, wasOn: before.has(li.dataset.id), moving: false, ids: [], target: null, ghost: null, x: ev.clientX, y: ev.clientY, raf: 0 };
+        document.addEventListener('pointermove', carryMove);
+        document.addEventListener('pointerup', carryEnd);
+        document.addEventListener('pointercancel', carryCancel);
+    }
+    const leftList = (x, y) => treeEl.contains(document.elementFromPoint(x, y)) || x < list.getBoundingClientRect().left;
+    function beginCarry() {
+        paint = null;   // 옮기는 동안엔 줄 칠하기 멈춤
+        const { before, wasOn, li } = carry;
+        // 비스듬히 끌면 왼쪽 목록에 닿기 전에 지나간 줄이 칠해짐 → 그 줄들은 빼고, 누른 줄 하나(체크된 줄을 눌렀으면 누르기 전에 체크돼 있던 줄 전부)만
+        const ids = wasOn ? [...before] : [li.dataset.id];
+        carry.ids = ids.sort((p, q) => (at.get(p) ?? 1e9) - (at.get(q) ?? 1e9));
+        rows.forEach(row => setRow(row, before.has(row.dataset.id)));
+        changed();
+        carry.ids.forEach(id => rowOf.get(id)?.classList.add('etk-pg-ed-carried'));
+        carry.moving = true;
+        root.classList.add('etk-pg-be-carrying');
+        const ghost = document.createElement('div');
+        ghost.className = 'etk-pg-be-ghost';
+        ghost.style.left = '0px'; ghost.style.top = '0px';
+        // 창 안쪽 칸은 넘친 것을 잘라서 그 밖(왼쪽 그룹 목록 바깥)에서는 표시가 잘렸음 → 창(dialog)에 바로 붙임
+        (root.closest('.popup') || root).append(ghost);
+        // 창에 transform 이 걸리면 fixed 기준이 화면이 아니라 창이 됨 → 0,0 에 놓아 본 자리만큼 빼서 마우스 옆에 맞춤
+        const r0 = ghost.getBoundingClientRect();
+        carry.ghost = { el: ghost, dx: r0.left, dy: r0.top };
+        carry.label = ids.length === 1 ? nameOf(ids[0]) : tr`${ids.length} toggles`;
+        carryScroll();
+    }
+    function carryMove(ev) {
+        if (!carry) return;
+        carry.x = ev.clientX; carry.y = ev.clientY;
+        if (!carry.moving) { if (!leftList(ev.clientX, ev.clientY)) return; beginCarry(); }
+        const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.etk-pg-be-g[data-g]');
+        const target = over && treeEl.contains(over) ? over : null;
+        if (target !== carry.target) { carry.target?.classList.remove('etk-pg-be-drop-in'); target?.classList.add('etk-pg-be-drop-in'); carry.target = target; }
+        const g = target && draft.find(x => x.id === target.dataset.g);
+        const where = !target ? '' : target.dataset.g === '' ? tr`Not in a group` : (g?.name || tr`(no name)`);
+        const { el, dx, dy } = carry.ghost;
+        el.textContent = where ? `${carry.label} → ${where}` : carry.label;
+        el.style.left = `${ev.clientX + 14 - dx}px`;
+        el.style.top = `${ev.clientY + 12 - dy}px`;
+    }
+    // 그룹이 많아 목록이 스크롤될 때: 위 · 아래 끝 가까이 끌고 있으면 그쪽으로 굴림
+    function carryScroll() {
+        if (!carry?.moving) return;
+        const r = treeEl.getBoundingClientRect(), edge = 28;
+        if (carry.x >= r.left && carry.x <= r.right) {
+            if (carry.y < r.top + edge) treeEl.scrollTop -= 10;
+            else if (carry.y > r.bottom - edge) treeEl.scrollTop += 10;
+        }
+        carry.raf = requestAnimationFrame(carryScroll);
+    }
+    function stopCarry() {
+        document.removeEventListener('pointermove', carryMove);
+        document.removeEventListener('pointerup', carryEnd);
+        document.removeEventListener('pointercancel', carryCancel);
+        if (!carry) return null;
+        const done = carry; carry = null;
+        cancelAnimationFrame(done.raf);
+        done.target?.classList.remove('etk-pg-be-drop-in');
+        done.ghost?.el.remove();
+        rows.forEach(row => row.classList.remove('etk-pg-ed-carried'));
+        root.classList.remove('etk-pg-be-carrying');
+        return done;
+    }
+    function carryEnd() {
+        const done = stopCarry();
+        if (done?.moving && done.target) dropInto(done.target.dataset.g, done.ids);
+    }
+    function carryCancel() { stopCarry(); }
+    // 끌어 놓은 토글을 그 그룹에 (그룹 없음이면 그룹에서 뺌). 체크는 옮긴 줄만 풂(체크 안 된 줄 하나를 옮겼으면 다른 체크는 그대로)
+    function dropInto(gid, ids) {
+        if (!ids.length) return;
+        if (gid === '') draft.forEach(x => { x.members = x.members.filter(id => !ids.includes(id)); });
+        else {
+            const g = draft.find(x => x.id === gid);
+            const todo = new Set(ids.filter(id => g && !g.members.includes(id)));
+            if (!todo.size) return;
+            putInto(g, todo);
+        }
+        ids.forEach(id => setRow(rowOf.get(id), false));
+        last = null;
+        renderTree(); refreshTags(); refilter();
+    }
     list.addEventListener('touchmove', ev => {
         if (!press?.long || paint === null) return;
         ev.preventDefault();
@@ -3030,9 +3404,9 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     list.addEventListener('click', ev => ev.preventDefault());
 
     // 넣기 · 빼기: 고른 토글을 다른 그룹에서 빼고 고른 그룹에 (실제 순서대로)
-    function putInto(g) {
-        const ids = [...selected].sort((p, q) => (at.get(p) ?? 1e9) - (at.get(q) ?? 1e9));
-        draft.forEach(x => { x.members = x.members.filter(id => !selected.has(id)); });
+    function putInto(g, pick = selected) {
+        const ids = [...pick].sort((p, q) => (at.get(p) ?? 1e9) - (at.get(q) ?? 1e9));
+        draft.forEach(x => { x.members = x.members.filter(id => !pick.has(id)); });
         // 순서를 직접 바꾼 그룹은 그 순서 뒤에 붙이고, 아니면 실제 순서대로
         g.members = custom.has(g.id) ? [...g.members, ...ids] : [...g.members, ...ids].sort((p, q) => (at.get(p) ?? 1e9) - (at.get(q) ?? 1e9));
     }
@@ -3042,6 +3416,7 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     root.querySelector('.etk-pg-be-clear').addEventListener('click', () => { rows.forEach(li => setRow(li, false)); changed(); });
 
     const search = root.querySelector('.etk-pg-search input');
+    const gripHint = root.querySelector('.etk-pg-be-griphint');
     // ‘이 그룹 편집’은 그 그룹 토글만 보이게 시작 (다른 토글을 넣으려면 ‘전체’)
     let filter = scopeId ? 'mine' : 'all';
     function refilter() {
@@ -3059,6 +3434,7 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
         const seq = reorder ? [...g.members.map(id => rowOf.get(id)).filter(Boolean), ...rows.filter(li => !direct.has(li.dataset.id))] : rows;
         if (seq.some((li, i) => list.children[i] !== li)) list.append(...seq);
         rows.forEach(li => li.classList.toggle('etk-pg-ed-direct', direct.has(li.dataset.id)));
+        gripHint.hidden = !reorder || !g.members.length;
         root.querySelectorAll('.etk-pg-be-filter .etk-pg-ed-chip').forEach(c => c.setAttribute('aria-checked', String(c.dataset.f === filter)));
     }
     root.querySelectorAll('.etk-pg-be-filter .etk-pg-ed-chip').forEach(c => c.addEventListener('click', () => { filter = c.dataset.f; refilter(); }));
@@ -3118,12 +3494,15 @@ async function openGroupEditor({ focusId = null, addNew = false, newParent = nul
     renderTree(); refreshTags(); refilter();
     if (addNew && sel) focusName(sel);
     // 창 위아래에 장식 여백이 큰 테마나 낮은 화면에서는 ‘화면의 78%’ 편집기가 창보다 커져 아래 단추가 창 테두리에 잘렸음 → 열린 뒤 남는 높이에 맞춤
-    const fit = () => fitEditorHeight(root);
+    // '이 그룹 편집'은 끌어서 크기를 바꾸고 기억함(PC). 화면 크기가 바뀌면 기억한 크기를 화면 안에 다시 맞춤
+    const sizeIt = () => { if (!scoped) return; const popup = root.closest('.popup'); if (!popup) return; if (popup.querySelector('.etk-pg-rz')) applyEdSize(popup, readEdSize()); else wireEditorResize(root); };
+    const fit = () => { sizeIt(); fitEditorHeight(root); };
     setTimeout(fit, 0); setTimeout(fit, 250);
     window.addEventListener('resize', fit);
-    const ok = await callGenericPopup(root, POPUP_TYPE.CONFIRM, '', { okButton: imp ? tr`Bring groups` : auto ? tr`Create` : tr`Save`, cancelButton: tr`Cancel`, wide: true, large: !scopeId, allowVerticalScrolling: true });
+    const ok = await callGenericPopup(root, POPUP_TYPE.CONFIRM, '', { okButton: imp ? tr`Bring groups` : auto ? tr`Create` : tr`Save`, cancelButton: tr`Cancel`, wide: true, large: !scoped, allowVerticalScrolling: true });
     window.removeEventListener('resize', fit);
     document.removeEventListener('pointerup', stopPaint);
+    stopCarry();
     if (!ok) return;
 
     // 빈 그룹(토글도 하위 그룹도 없음)은 버리고, 이름이 비면 안 토글 이름으로

@@ -12,10 +12,12 @@ let chip = null, menu = null, timer = 0, watcher = null, found = new Set(), acti
 // 어느 확장이 띄운 버튼인지: 글을 고른 동안만 화면에 요소를 붙이는 함수를 한 겹 거쳐, 붙인 코드의 파일 주소(…/third-party/확장폴더/…)를 적어 둠.
 // 고르기가 끝나면 원래대로 돌려놓음. 글을 고르기 전에 이미 붙어 있다가 보이기만 하는 버튼은 붙인 쪽을 볼 길이 없어 빈칸으로 남음(설정에 ‘알 수 없어요’)
 const origins = new WeakMap();
+const OWN_PART = ':translator';   // breeze 안의 번역 기능이 띄운 버튼(확장 폴더 이름이 될 수 없는 글자로)
 // 붙인 코드의 파일 주소 중 breeze 자신(이 감싸는 함수)을 빼고 가장 가까운 확장을 적어 둠
 function tag(nodes) {
     const stack = new Error().stack || '';
-    const from = [...stack.matchAll(/\/third-party\/([^/]+)\//g)].map(m => decodeURIComponent(m[1])).find(f => f !== OWN) || '';
+    // breeze 안에 든 번역 기능이 띄운 버튼은 폴더가 breeze 라 아래에서 걸러짐 → 따로 표시(OWN_PART)
+    const from = [...stack.matchAll(/\/third-party\/([^/]+)\//g)].map(m => decodeURIComponent(m[1])).find(f => f !== OWN) || (stack.includes(`/${encodeURIComponent(OWN)}/translator/`) || stack.includes(`/${OWN}/translator/`) ? OWN_PART : '');
     if (!from) return;
     for (const n of nodes) if (n instanceof Element && !n.className?.toString().includes('etk-')) origins.set(n, from);
 }
@@ -121,9 +123,10 @@ function saveSoon() {
     saveQueued = true;
     queueMicrotask(() => { saveQueued = false; api.save(); });
 }
-// 그 버튼을 띄운 쪽: 붙는 걸 본 기록 → 전에 적어 둔 것 → 모양을 입힌 스타일 파일
+// 그 버튼을 띄운 쪽: 붙는 걸 본 기록 → 전에 적어 둔 것 → 번역 버튼 막대의 이름 → 모양을 입힌 스타일 파일
 function fromOf(el, was) {
-    return origins.get(el) || [...el.querySelectorAll('*')].map(x => origins.get(x)).find(Boolean) || (was.from !== OWN && was.from) || fromStyles(el);
+    // 번역 기능의 버튼 막대는 이 기능이 붙는 것을 지켜보기 전에(번역이 먼저 시작되면) 만들어져 붙인 쪽을 못 봄 → 그 막대의 이름으로 알아봄
+    return origins.get(el) || [...el.querySelectorAll('*')].map(x => origins.get(x)).find(Boolean) || (was.from !== OWN && was.from) || (/^llmt-/.test(el.id) ? OWN_PART : '') || fromStyles(el);
 }
 function learn(list) {
     let fresh = false, changed = false;
@@ -557,7 +560,9 @@ export function options(box, a) {
         const named = o.known.map(line => line.split(' = ')).map(([sel, name]) => takesName(sel.trim(), (name || '').trim()));
         box.innerHTML = `<div class="etk-sub">⋯ 메뉴에 모은 버튼</div><small>글을 고르면 ⋯ 하나만 뜨고, 누르면 아래 버튼들이 이 순서로 나와요.</small>${guide(o, named.includes(true))}`;
         const describe = (row, sel) => {
-            const meta = info()[sel] || {};
+            let meta = info()[sel] || {};
+            // 번역 기능의 버튼 막대는 붙인 쪽을 못 본 채 적혀 있을 수 있음(출처 빈 값) → 글을 고르길 기다리지 않고 그 막대의 이름으로 알아봄
+            if (!meta.from && /^#llmt-/.test(sel)) meta = { ...meta, from: OWN_PART };
             // 아직 정보가 없는 줄: 그 버튼이 지금 화면에 있으면 거기서 하는 일을 읽고, 없으면 띄우는 확장이 꺼졌거나 지워진 것
             let live = null;
             try { live = document.querySelector(sel); } catch { /* 잘못 적힌 줄 */ }
@@ -567,9 +572,9 @@ export function options(box, a) {
             // 낸 확장 빈칸: 글을 고르는 동안 그 버튼이나 안의 것이 붙는 걸 못 본 경우(고르기 전부터 화면에 붙어 있던 버튼) → 다시 골라도 알 길이 없으니 그렇게 말함.
             //   아직 한 번도 적힌 적 없는 줄만 글을 고르면 찾아본다고 안내
             const noFrom = info()[sel] ? '어느 확장의 버튼인지 알 수 없어요' : '글을 한 번 고르면 어느 확장의 버튼인지 찾아봐요';
-            fromEl.textContent = meta.from ? `${meta.from} 확장` : does ? noFrom : '지금 이 버튼을 띄우는 확장이 없어서(꺼졌거나 지워짐) 무슨 버튼인지 알 수 없어요. 필요 없으면 지워요';
+            fromEl.textContent = meta.from === OWN_PART ? 'breeze 번역' : meta.from ? `${meta.from} 확장` : does ? noFrom : '지금 이 버튼을 띄우는 확장이 없어서(꺼졌거나 지워짐) 무슨 버튼인지 알 수 없어요. 필요 없으면 지워요';
             row.dataset.orphan = does ? '' : '1';
-            if (meta.from) extensionName(meta.from).then(n => { fromEl.textContent = `${n} 확장`; });
+            if (meta.from && meta.from !== OWN_PART) extensionName(meta.from).then(n => { fromEl.textContent = `${n} 확장`; });
         };
         const commit = () => { a.save(); if (active) applyKnown(); };
         // 줄이 많아도 설정 칸이 끝없이 길어지지 않게, 칸마다 줄을 스크롤되는 목록에 담음(칸 제목 다음에 처음 붙일 때 새 목록을 만듦)

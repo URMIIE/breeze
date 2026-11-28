@@ -28,6 +28,7 @@ export const WAND_WINDOW_NAME = '요술봉 앱 서랍';
 
 export const FEATURES = [
     // 채팅
+    { id: 'translator', added: '1.4.0', hasOptions: true, group: '채팅', icon: 'language', name: '번역', desc: '고른 모델로 답을 번역해서 보여 줘요' },
     { id: 'preset_stamp', added: '1.3.0', hasOptions: true, group: '채팅', bundle: '답 정보 보기', icon: 'stamp', name: '프리셋 스탬프', desc: '이름을 누르면 어떤 모델과 프리셋으로 썼는지 알려 줘요' },
     { id: 'stream_progress', added: '1.3.0', group: '채팅', bundle: '답 정보 보기', icon: 'pen-nib', name: '받는 중 표시', desc: '답이 써지는 동안 받은 글자 수가 보여요', alias: '답 받는 중 표시' },
     { id: 'worldinfo_fired', added: '1.2.0', group: '채팅', bundle: '답 정보 보기', icon: 'globe', name: '들어간 월드인포', desc: '그 답에 쓰인 월드인포를 볼 수 있어요', alias: '답에 들어간 월드인포 표시' },
@@ -36,6 +37,7 @@ export const FEATURES = [
     { id: 'preset_look_keep', hasOptions: true, group: '채팅', icon: 'thumbtack', name: '옛 답 모양 지키기', desc: '프리셋을 바꿔도 예전 답이 안 깨져요', alias: '메시지별 정규식 유지' },
     { id: 'reading_resume', group: '채팅', icon: 'bookmark', name: '읽던 곳에서 이어 보기', desc: '채팅을 다시 열면 읽던 곳으로 가요', alias: '읽던 자리 기억' },
     { id: 'swipe_duplicate', group: '채팅', icon: 'copy', name: '답 하나 더 만들기', desc: '메시지의 » 버튼을 누르면 지금 답이 옆 스와이프에 복사돼요', alias: '스와이프 복사' },
+    { id: 'chat_memory', added: '1.3.0', hasOptions: true, group: '채팅', icon: 'clock-rotate-left', name: '이 채팅 기억', desc: '채팅마다 쓰던 프롬프트와 연결을 다시 열 때 그대로 맞춰요' },
     // 알림
     { id: 'done_sound', hasOptions: true, group: '알림', icon: 'volume-high', name: '완료 알림음', desc: '답이 다 써지면 소리로 알려 줘요', alias: '다 되면 소리 내기' },
     { id: 'toast_close', added: '1.2.2', hasOptions: true, group: '알림', icon: 'circle-xmark', name: '알림 바로 닫기', desc: '알림에 닫는 버튼이 생겨요', alias: '알림 닫기 버튼 알림 정리' },
@@ -44,7 +46,6 @@ export const FEATURES = [
     { id: 'extension_panel', added: '1.2.2', hasOptions: true, group: '창 정리', icon: 'puzzle-piece', name: '확장 설정 찾기 쉽게', desc: '확장 이름을 목록으로 보고 하나씩 열어요', alias: '확장 창 정리' },
     { id: 'chat_file_list', added: '1.2.0', hasOptions: true, group: '창 정리', icon: 'folder-open', name: '채팅 목록 관리', desc: '열지 않고 내용을 보고, 여러 개를 한 번에 지워요', alias: '채팅 파일 창 정리' },
     { id: 'prompt_groups', added: '1.3.0', hasOptions: true, group: '창 정리', icon: 'layer-group', name: '프롬프트 그룹', desc: '프롬프트 토글을 접고 펼치는 그룹으로 묶어요' },
-    { id: 'chat_memory', added: '1.3.0', hasOptions: true, group: '창 정리', icon: 'clock-rotate-left', name: '이 채팅 기억', desc: '채팅마다 쓰던 프롬프트와 연결을 다시 열 때 그대로 맞춰요' },
     { id: 'worldinfo_library', added: '1.2.0', group: '창 정리', bundle: '월드인포 정리', icon: 'folder-tree', name: '폴더와 한 줄 목록', desc: '월드인포를 폴더로 나누고 항목을 한 줄로 접어요', alias: '월드인포 창 정리' },
     { id: 'wi_real_tokens', group: '창 정리', bundle: '월드인포 정리', icon: 'calculator', name: '실제 토큰 수', desc: '항목마다 AI에게 실제로 가는 토큰 수가 보여요', alias: '월드인포 실제 토큰 수 표시' },
     { id: 'wand_window', added: '1.3.0', group: '창 정리', icon: 'table-cells', name: WAND_WINDOW_NAME, desc: '마법봉 메뉴를 아이콘이 놓인 창으로 띄워요. 옮기고 크기를 바꾸고 꾸밀 수 있어요', alias: '마법봉 창 요술봉 메뉴 앱 메뉴 아이폰' },

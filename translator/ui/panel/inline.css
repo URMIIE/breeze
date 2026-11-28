@@ -1,0 +1,7 @@
+/* breeze 설정 창의 번역 칸(inline.js). 모습은 common.css 의 시안 클래스. 칸을 품은 화면의 글자 규칙이 새지 않게 하는 것만 둔다. */
+.btr-inline { font-size: 14px; line-height: 1.45; color: var(--ink); text-align: left; }
+/* 칸을 품은 화면이 작은 글을 흐리게 하는 규칙을 걸어 두면 작은 글이 두 번 흐려진다: 색으로만 흐리게 한다 */
+.btr-inline.btr-inline small { opacity: 1 !important; }
+.btr-inline .sec:first-child { margin-top: 12px; }
+/* 맨 아래 세부 설정 줄: 이름 칸이 글 길이만큼만 차지해 화살표가 줄 가운데에 서고 그 오른쪽이 비어 보였다. 이름 칸을 늘려 화살표를 줄 끝에 둔다 */
+.btr-inline .line[data-detail] .k { flex: 1; min-width: 0; max-width: none; }

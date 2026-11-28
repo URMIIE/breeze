@@ -1,0 +1,19 @@
+/* 입력창 옆 번역 버튼: 켜져 있으면 테마의 강조색, 번역하는 동안 깜빡인다 */
+#llm_translate_input_button {
+    position: relative;
+    transition: color .15s;
+    -webkit-user-select: none;
+    user-select: none;
+    /* 휴대폰에서 길게 누를 때 브라우저의 메뉴가 뜨지 않게 */
+    -webkit-touch-callout: none;
+}
+#llm_translate_input_button.is-on {
+    color: var(--SmartThemeQuoteColor) !important;
+    opacity: 1;
+}
+#llm_translate_input_button.is-busy i { animation: btr-input-pulse 1s ease-in-out infinite; }
+@keyframes btr-input-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+    #llm_translate_input_button { transition: none; }
+    #llm_translate_input_button.is-busy i { animation: none; }
+}

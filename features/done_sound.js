@@ -1,3 +1,4 @@
+import { gate } from '../translator/gates.js';
 import { fromStack } from '../lib/who.js';
 // 답 · 번역이 끝나면 소리로 알리기.
 // 답 생성이 끝났을 때, 그리고 ‘답 말고도 알릴 때’에 등록해 둔 다른 확장의 끝남 신호(번역 완료 등)가 왔을 때 짧은 소리를 낸다.
@@ -354,8 +355,15 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // 확장마다 하나씩 체크하지 않아도 되게. 줄마다 끌 수 있음
 const jobOf = (n) => { const s = String(n).toLowerCase(); return /translat/.test(s) ? '번역' : /summar/.test(s) ? '요약' : /reply|respon/.test(s) ? '답장' : /tts|voice|speech/.test(s) ? '음성' : /image|img|picture|diffusion|comfy|(^|[^a-z])sd[_:-]/.test(s) ? '그림' : ''; };
 let autoSignals = new Map();   // 신호 이름 → 확장 폴더('a|b')
+// breeze 안에 든 번역 기능이 낸 신호: 폴더가 breeze 라 '낸 확장 없음'으로 잡혀, 목록에서 끌 수 없는 채 늘 울렸음 → 따로 표시(확장 폴더 이름이 될 수 없는 글자로)
+const OWN_PART = ':translator';
+const OWN_SIGNALS = ['EXTENSION_LLM_TRANSLATE_DONE'];   // 그 번역 기능의 '번역 끝' 신호(다른 확장이 같은 이름을 안 써도 듣게)
+const OWN_PART_DIRS = ['translator'];   // 그 번역 기능의 파일이 든 폴더들
+const fromOwnPart = (stack) => [OWN, encodeURIComponent(OWN)].some(own => OWN_PART_DIRS.some(dir => stack.includes(`/${own}/${dir}/`)));
+const ownPartOn = () => { try { return !!globalThis[Symbol.for('breeze.api')]?.isOn?.('translator'); } catch { return false; } };
+const partName = async (folder) => (folder === OWN_PART ? 'breeze 번역' : extensionName(folder));
 // 신호를 낸 확장 폴더(호출 기록에서 breeze · 신호 보내기를 감싼 칸은 건너뜀)
-const emitterOf = () => { const stack = new Error().stack || ''; return stack.split('\n').filter(l => !/at (?:\S+\.)?(?:emit|dispatchEvent) \(/.test(l)).map(l => l.match(/\/third-party\/([^/]+)\//)?.[1]).filter(Boolean).map(decodeURIComponent).find(f => f !== OWN) || ''; };
+const emitterOf = () => { const stack = new Error().stack || ''; return stack.split('\n').filter(l => !/at (?:\S+\.)?(?:emit|dispatchEvent) \(/.test(l)).map(l => l.match(/\/third-party\/([^/]+)\//)?.[1]).filter(Boolean).map(decodeURIComponent).find(f => f !== OWN) || (fromOwnPart(stack) ? OWN_PART : ''); };
 // 신호를 낸 확장은 내는 순간에 적어 둔다. 듣는 쪽에서 호출 기록으로 찾으면, 신호 통로가 앞선 듣는 쪽을 기다린(await) 뒤에 우리를 부를 때
 // 기록이 끊겨 낸 확장을 못 찾았고, 그래서 꺼 둔 '확장#하는 일' 줄을 가리지 못해 울렸음.
 // 신호에 실린 객체(화면 신호는 그 신호 객체)를 열쇠로 적고, 객체가 안 실린 신호는 신호 이름마다 낸 차례대로 줄을 세워 듣는 쪽이 앞에서부터 꺼냄(시간으로 어림하지 않음)
@@ -379,10 +387,14 @@ function markedEmitter(name, got) {
 // 기본은 다 켜 두고, 설정에서 뺀 ‘확장 · 하는 일’(otherOff)만 무시 — 같은 번역 신호를 두 확장이 내도 실제로 낸 쪽으로 가름
 function onNamedSignal(name, detail) {
     const off = api.options().otherOff || [];
-    // 낸 쪽: 내는 순간 적어 둔 것 → 없으면 지금 호출 기록
-    const j = jobOf(name), who = markedEmitter(name, detail) || emitterOf() || '';
+    // 낸 쪽: 내는 순간 적어 둔 것 → 없으면 지금 호출 기록 → 그래도 없으면 신호에 적힌 표시로 breeze 안 번역 기능을 알아봄
+    const d0 = detail?.detail ?? detail;
+    const j = jobOf(name), who = markedEmitter(name, detail) || emitterOf() || (d0?.by === 'llmt' ? OWN_PART : '');
     if (j && who && off.includes(`${who}#${j}`)) return;
     const tone = j && who ? `${who}#${j}` : null;
+    // breeze 안 번역 기능의 '번역 끝'은 본문 번역이 끝난 때다. 그 뒤 상태창 · 카드 글자 번역이 이어지면 그것까지 끝난 뒤에 알린다(3분 넘으면 그냥 알림)
+    const wait = who === OWN_PART && j === '번역' ? globalThis[gate('screen-work')]?.wait : null;
+    if (typeof wait === 'function') { Promise.race([wait(d0?.messageId), new Promise(r => setTimeout(r, 180000))]).catch(() => {}).then(() => onSignal(name, who, detail, tone)); return; }
     onSignal(name, who, detail, tone);
 }
 function listenSignals() {
@@ -391,6 +403,7 @@ function listenSignals() {
     docListeners = [];
     const names = new Set([...autoSignals.keys()].filter(jobOf));
     for (const sig of signals()) if (sig.on && sig.event?.trim()) names.add(sig.event.trim());   // 예전에 골라 둔 신호도 그대로
+    if (ownPartOn()) for (const n of OWN_SIGNALS) names.add(n);
     heardNames.clear(); emitterInOrder.clear();
     for (const name of names) {
         heardNames.add(name);
@@ -839,7 +852,8 @@ async function extRows(o) {
         for (const folder of list) if (list.length < 2 || (o.confirmed || []).includes(`${folder}#${n}`)) pairs.set(`${folder}#${j}`, [folder, j]);
     }
     for (const [n, info] of seen) { const j = jobOf(n); if (j && info.from && isDoneName(n)) pairs.set(`${info.from}#${j}`, [info.from, j]); }
-    const signalRows = await Promise.all([...pairs].map(async ([key, [folder, j]]) => ({ key, name: await extensionName(folder), job: `${j}이 끝날 때`, kind: 'signal' })));
+    if (ownPartOn()) pairs.set(`${OWN_PART}#번역`, [OWN_PART, '번역']);
+    const signalRows = await Promise.all([...pairs].map(async ([key, [folder, j]]) => ({ key, name: await partName(folder), job: `${j}이 끝날 때`, kind: 'signal' })));
     // 자기 끝 신호를 내는 확장은 그 신호 줄이 같은 일(번역 요청 끝 = 번역 끝)을 알려서 'AI 요청' 줄은 뺌. 이미 켜 둔 줄은 끌 수 있게 남김
     const hasOwn = new Set([...pairs.values()].map(([folder]) => folder));
     // 요청을 본 적 있는 확장 + 코드에 AI 요청을 부르는 곳이 있는 확장(아직 한 번도 안 보냈어도 미리 보임)

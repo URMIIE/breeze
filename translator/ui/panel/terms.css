@@ -1,0 +1,67 @@
+/* 용어집 화면과 채우기 화면에만 있는 배치. 공통 모습(.gbar · .glist · .gedit · .gfoot · .cand 등)은 common.css 가 준다. */
+
+/* 시안은 글자 칸을 div 로 그렸다: 실제 입력 칸과 버튼이 같은 모습이 되게 브라우저 기본 모양을 걷는다 */
+.btr-plan .gloss input.input, .btr-plan .fillscreen input.input { width:100%; min-width:0; box-sizing:border-box; margin:0; font:inherit; font-size:13.5px; color:var(--ink); outline:0; }
+.btr-plan .gloss input.input::placeholder { color:var(--mute); opacity:.8; }
+.btr-plan .gloss input.input:focus-visible, .btr-plan .gloss select.gsel:focus-visible { border-color:var(--rose); }
+.btr-plan .gloss button, .btr-plan .fillscreen button { font-family:inherit; margin:0; cursor:pointer; }
+.btr-plan .gloss button.keep, .btr-plan .gloss button.gsel { appearance:none; }
+.btr-plan .gloss button.keep { border:0; background:none; color:inherit; padding:0; text-align:left; }
+.btr-plan .gloss .rtitle .keep { min-height:0; }
+.btr-plan .gloss .rtitle .keep > span:last-child { font-size:13.5px; font-weight:400; }
+.btr-plan .gloss button.go, .btr-plan .gloss button.pill, .btr-plan .fillscreen button.go { border:0; }
+.btr-plan .gloss select.gsel { appearance:none; max-width:104px; margin:0; font:inherit; font-size:13px; color:var(--ink); cursor:pointer; text-overflow:ellipsis; }
+/* 넣는 줄의 쓰는 곳: 실제 select 라 시안의 아래 화살표를 옆에 겹쳐 그린다(누르는 것은 select 가 받는다) */
+.btr-plan .gloss .gpick { position:relative; display:inline-flex; align-items:center; }
+.btr-plan .gloss .gpick select.gsel { padding-right:26px; font-weight:400; border-color:var(--line); }
+.btr-plan .gloss .gpick > svg { position:absolute; right:8px; width:12px; height:12px; pointer-events:none; stroke:var(--mute); fill:none; stroke-width:2; }
+.btr-plan .gloss .gsel .arr, .btr-plan .gloss .gfoot .line > .arr { font-size:10px; color:var(--edge); }
+.btr-plan .gloss .gset span.on i { display:none; }
+
+/* 고치는 칸: 줄이 그 자리에서 바뀐 것이라 줄과 같은 선으로 나뉜다 */
+.btr-plan .gloss .glist .gedit + .term, .btr-plan .gloss .glist .term + .gedit { border-top:1px solid var(--hair); }
+
+/* 예전 번역에서 나온 이름: 원문 → 굵은 표기, 오른쪽 끝에 넣기 */
+.btr-plan .gloss .gseen { grid-template-columns:72px 14px minmax(0, 1fr) 52px !important; padding:0; min-height:36px; cursor:default; }
+.btr-plan .gloss .gseen b { font-weight:600; }
+.btr-plan .gloss .gfoot .note { margin:0 0 4px; }
+.btr-plan .gloss .gfoot .gkeeps { margin-top:8px; padding:0 4px; }
+.btr-plan .gloss .gplan { margin-top:8px; font-size:13px; line-height:1.55; }
+.btr-plan .gloss .gplan > b { font-weight:600; }
+.btr-plan .gloss .gplan .btns { margin-top:8px; }
+
+/* ── 채우기 ── */
+.btr-plan .fillscreen .fwait { display:flex; align-items:center; gap:12px; min-height:44px; margin-top:8px; font-size:14px; }
+.btr-plan .fillscreen .fwait > span { flex:1; min-width:0; }
+.btr-plan .fillscreen .fwait > i { color:var(--rose); }
+.btr-plan .fillscreen .cand { cursor:pointer; }
+.btr-plan .fillscreen .fend { margin-top:16px; justify-content:flex-end; }
+.btr-plan .fillscreen .fstart { margin-top:12px; }
+
+/* 평소 줄의 쓰는 곳은 글자만(딱지의 바탕 면을 두면 줄마다 버튼처럼 보인다) */
+/* 실리태번의 캐릭터 태그 스타일(.tag: 면 · 테두리 · 둥근 모서리)이 같은 클래스 이름이라 같이 걸린다: 여기서 걷는다 */
+.btr-plan .gloss .glist .term > .tag { background:none !important; border:0 !important; border-radius:0; padding:0; box-shadow:none; font-size:13px; font-weight:400; }
+/* 정렬 버튼: 누를 때마다 번역순 ↔ 원문순. 지금 무엇인지 좁은 화면에서도 글로 보인다 */
+.btr-plan.phone.fix:not(.pop) .gloss .gbar .gsel .sv { display:inline; }
+.btr-plan .gloss .gbar .gsel { gap:6px; }
+
+/* 다른 캐릭터에서 가져오기: 캐릭터 목록은 높이를 정해 두고 그 안에서 내린다(캐릭터가 많아도 판이 늘지 않게). 누른 줄 아래에 들어올 것 */
+.btr-plan .gloss .gfrom { max-height:264px; overflow-y:auto; overscroll-behavior:contain; margin-top:6px; border:1px solid var(--hair); border-radius:10px; }
+.btr-plan .gloss .gfrom-row { display:grid; grid-template-columns:32px minmax(0, 1fr) auto; align-items:center; gap:10px; min-height:44px; padding:6px 10px; cursor:pointer; }
+.btr-plan .gloss .gfrom-row + .gfrom-row, .btr-plan .gloss .gfrom .gplan + .gfrom-row { border-top:1px solid var(--hair); }
+.btr-plan .gloss .gfrom-row.on { background:var(--wash); }
+.btr-plan .gloss .gfrom-row img.face { width:32px; height:32px; border-radius:50%; object-fit:cover; display:block; }
+.btr-plan .gloss .gfrom-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; }
+.btr-plan .gloss .gfrom-row > small { color:var(--mute); font-size:12.5px; white-space:nowrap; }
+.btr-plan .gloss .gfrom .gplan { margin:0; padding:8px 10px 10px 52px; background:var(--wash); }
+.btr-plan .fillscreen .fstart { align-items:center; gap:10px; }
+.btr-plan .fillscreen .fcost { font-size:12.5px; color:var(--mute); }
+
+/* 다른 캐릭터에서 가져오기: 누른 캐릭터 아래에 들어올 용어 몇 줄(원문 → 번역) */
+.btr-plan .gloss .gplan-terms { margin:6px 0 2px; }
+.btr-plan .gloss .gplan-term { display:grid; grid-template-columns:minmax(0, 1fr) 14px minmax(0, 1fr); gap:6px; align-items:center; min-height:24px; font-size:13px; }
+.btr-plan .gloss .gplan-term > span { overflow-wrap:anywhere; }
+.btr-plan .gloss .gplan-term > i { font-size:10px; color:var(--edge); }
+.btr-plan .gloss .gplan-rest { font-size:12.5px; color:var(--mute); }
+/* 머리: 화면 이름 없이 용어 수와 사용 체크만 */
+.btr-plan .gloss .rtitle small { margin-left:0; font-size:13.5px; font-weight:400; color:var(--mute); }

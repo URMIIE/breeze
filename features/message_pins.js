@@ -217,6 +217,18 @@ export function setHidden(key, on) {
     api.save(); applyHidden(); hiddenMemo.found = false; placeAll();
     return true;
 }
+// 다른 기능(번역 설정의 버튼 순서)이 같은 순서 목록을 고칠 때: 두 목록(바로 표시 pins, ⋯ 메뉴 menuOrder)을 읽고 쓴다. 이 기능이 꺼져 있으면 null · false
+export const getOrder = () => (api ? { pins: [...pins()], menuOrder: [...((api.options().menuOrder ??= []).filter(k => /^[\w-]+$/.test(k)))] } : null);
+export function setOrder({ pins: nextPins, menuOrder } = {}) {
+    if (!api) return false;
+    const clean = list => (Array.isArray(list) ? list.filter(k => typeof k === 'string' && /^[\w-]+$/.test(k)) : null);
+    const o = api.options(), p = clean(nextPins), m = clean(menuOrder);
+    if (p) o.pins = p;
+    if (m) o.menuOrder = m;
+    // ⋯ 메뉴 차례는 CSS order(applyHidden), 바로 표시 차례는 버튼을 다시 놓아(placeAll) 맞춘다
+    api.save(); applyHidden(); placeAll();
+    return true;
+}
 export function stop() {
     hideStyle?.remove(); hideStyle = null;
     observer?.disconnect(); observer = null;

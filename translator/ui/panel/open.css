@@ -1,0 +1,29 @@
+/* 다시 번역 판의 위쪽(open.js 가 그리는 것). 색, 버튼은 common.css 의 옛 한 벌을 쓴다. */
+/* 다시 번역 판: 위에 되돌리기 줄(있을 때만), 그 아래가 다시 번역 화면. 판 높이는 그대로 두고 화면 쪽이 줄어든다 */
+.btr-open-redo { display: flex; flex-direction: column; }
+.btr-open-redo .btr-open-redotop:empty { display: none; }
+.btr-open-redo .btr-open-redotop { flex: none; padding: 4px 16px 8px; }
+/* 화면을 담는 칸이 높이 없는 블록이면 화면(높이 100%)이 대사 수만큼 늘고 판이 그 아래를 잘라, 대사 목록이 굴러가지 않았다.
+   담는 칸이 남은 높이를 받아야 화면 안의 대사 목록(redo.css .rrows)만 그 안에서 굴러간다 */
+.btr-open-redo .btr-open-redohost { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.btr-open-redo .btr-open-redohost > .btr-redo-root { flex: 1; min-height: 0; }
+
+/* 첫 화면(home.js)의 용어집 줄. common.css 는 시안 두 파일을 합친 것이라 용어집 화면의 다섯 칸 줄 규칙(!important)이
+   첫 화면의 세 칸 줄(원문 → 번역)까지 덮어 화살표가 왼쪽으로 쏠렸다: 첫 화면 안에서만 시안 첫 화면의 값으로 되돌린다 */
+.btr-plan .btr-home-terms { display: contents; }
+.btr-plan .btr-home .term { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) !important; gap: 8px; min-height: 36px; padding: 0 12px 0 16px; }
+.btr-plan .btr-home .term > span:first-child { font-family: inherit; font-size: 13px; }
+.btr-plan .btr-home .term > i { text-align: center; }
+.btr-plan .btr-home .term.add { grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr) auto !important; min-height: 44px; }
+.btr-plan .btr-home .term.add .input { min-width: 0; min-height: 32px; padding: 0 12px; }
+/* 같은 까닭으로 용어집 화면의 '줄 안 버튼은 여백 0' 규칙이 넣기 버튼의 글을 잘랐다 */
+.btr-plan .btr-home .term.add > .go { justify-self: end; padding: 0 12px !important; overflow: visible; }
+/* 실제 말투 글은 몇 문장씩이라 첫 화면 사람 줄이 서너 줄로 늘었다: 시안처럼 한 줄만 보이고 나머지는 사람 화면에서 본다 */
+.btr-plan .btr-home .person > div { min-width: 0; }
+.btr-plan .btr-home .person .tone { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* 왼쪽 칸 아래 두 줄: 양옆 여백을 위쪽 묶음의 줄과 같게(16px · 12px). 바탕 폭은 위 묶음과 같고, 고른 줄의 바탕이 아이콘에 붙지 않는다 */
+.btr-plan.fix .lcol .frows .line { padding-left: 16px; padding-right: 12px; }
+
+/* 휴대폰: 맨 아래 두 줄(상태창 번역 · 그 밖의 설정)을 위 묶음에서 조금 더 띄운다 */
+.btr-plan.phone.fix:not(.pop) .frows.lfoot { margin-top: 20px; }

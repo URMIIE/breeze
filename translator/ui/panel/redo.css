@@ -1,0 +1,74 @@
+/* 다시 번역 판에만 있는 배치. 칸 · 버튼 · 딱지 · 색의 모습은 common.css(시안의 클래스) 것을 쓴다 */
+.btr-redo-root { height: 100%; min-height: 0; display: flex; flex-direction: column; color: var(--ink); font-size: 14px; line-height: 1.45; }
+.btr-redo-root :is(*, *::before, *::after) { box-sizing: border-box; }
+.btr-redo-root [hidden] { display: none !important; }
+/* 버튼과 적는 칸을 브라우저 기본 모습에서 벗긴다(:where 라 공통 모습이 늘 이긴다) */
+.btr-redo-root :where(button, input[type="text"]) { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; outline: none; box-shadow: none; appearance: none; }
+.btr-redo-root :where(button) { cursor: pointer; }
+.btr-redo-root :where(button:disabled) { cursor: default; opacity: .45; }
+.btr-redo-root button:focus-visible { outline: 2px solid var(--rose); outline-offset: -2px; }
+.btr-redo-root input.input { width: 100%; color: var(--ink); }
+.btr-redo-root input.input::placeholder { color: var(--mute); opacity: 1; }
+.btr-redo-root .fa-solid { line-height: 1; }
+
+.btr-redo-root .rmain, .btr-redo-root .rdecide { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* 예전 답 안내 */
+.btr-redo-root .rinfo { flex: none; margin: 0 16px 10px; padding: 10px 12px; border-radius: 14px; background: var(--wash); font-size: 13px; line-height: 1.5; }
+
+/* 위의 버튼 줄: 넘치면 다음 줄로 내린다(옆으로 밀게 두면 스크롤 막대가 없어 뒤에 사람이 더 있는 줄 몰랐다) */
+.btr-redo-root .rsetswrap { flex: none; }
+.btr-redo-root .filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px 10px; }
+.btr-plan.fix.btr-redo-root .set, .btr-plan.fix .btr-redo-root .set { height: 30px; padding: 0 12px; font-size: 13px; }
+.btr-plan.fix.btr-redo-root .set.part, .btr-plan.fix .btr-redo-root .set.part { border: 0; background: var(--wash); color: var(--rose); }
+
+/* 모르는 대사를 여럿 골랐을 때의 줄 */
+.btr-redo-root .rpickbar { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px 8px; font-size: 13px; color: var(--mute); }
+.btr-plan.fix.btr-redo-root .pill, .btr-plan.fix .btr-redo-root .pill { height: 30px; padding: 0 12px; border-radius: 15px; font-size: 13px; }
+
+/* 대사 목록: 판 안에서 스크롤하고, 아래 끝은 흐리게 */
+.btr-redo-root .rrows { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px; overscroll-behavior: contain; scrollbar-width: none; }
+.btr-redo-root .rrows::after { content: ''; display: block; position: sticky; bottom: 0; height: 26px; margin-top: -26px; background: linear-gradient(transparent, var(--paper)); pointer-events: none; }
+.btr-redo-root .rrow { display: grid; grid-template-columns: 24px 1fr; gap: 10px; padding: 4px 0 0; }
+.btr-redo-root .rrow + .rrow { border-top: 1px solid var(--hair); }
+.btr-redo-root .rtick { width: 36px; height: 36px; margin: 0 0 0 -8px; display: grid; place-items: center; }
+.btr-redo-root .chk { border-radius: 50%; }
+.btr-redo-root .chk .fa-solid { font-size: 10px; }
+.btr-redo-root .rbody { min-width: 0; }
+.btr-redo-root .nm { height: 36px; }
+.btr-redo-root .nm .fa-solid { font-size: 11px; }
+.btr-redo-root .rq { display: block; width: 100%; min-height: 36px; margin-top: -8px; padding: 4px 0 12px; font-family: var(--story); font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.btr-redo-root .rnames { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.btr-redo-root .rname { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--soft); font-size: 13px; display: inline-flex; align-items: center; }
+.btr-redo-root .rname.cur { background: var(--wash); color: var(--rose); font-weight: 600; }
+.btr-redo-root .rname.more { color: var(--mute); }
+
+/* 대사가 없는 답 */
+.btr-redo-root .rempty { flex: 1; min-height: 0; display: grid; place-items: center; text-align: center; padding: 0 28px; color: var(--mute); line-height: 1.6; white-space: pre-line; }
+
+/* 키보드가 올라왔을 때: 위의 것을 다 접고 한 줄만 */
+.btr-redo-root .rsum { display: none; }
+.btr-redo-root.typing .rsum { flex: none; margin: 0 16px 10px; min-height: 36px; border-radius: 14px; background: var(--field); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 0 12px; }
+.btr-redo-root.typing .rsum > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btr-redo-root .rlink { flex: none; height: 36px; padding: 0 12px; color: var(--rose); font-weight: 600; font-size: 13px; }
+.btr-redo-root.typing :is(.rinfo, .rsetswrap, .rpickbar, .rrows, .rempty, .foot > .note, .keep) { display: none; }
+
+/* 맨 아래: 적어 둔 말투, 이번 말투나 부탁 칸, 적어 두기, 앞 번역도 같이 보내기, 보내는 버튼 */
+.btr-redo-root .foot { gap: 8px; }
+.btr-redo-root .foot > .note { margin: 0; }
+.btr-redo-root .keep { min-height: 32px; }
+.btr-redo-root .btr-redo-check { display: flex; align-items: center; gap: 8px; min-height: 32px; margin: 0; font-size: 14px; cursor: pointer; }
+.btr-redo-root .btr-redo-check input { flex: none; margin: 0; }
+/* 체크 칸은 브라우저 기본 모양이면 위의 '적어 두기' 줄의 칸과 달라 보여서 같은 크기 · 색으로 그린다 */
+.btr-redo-root .btr-redo-check input[type="checkbox"] { appearance: none; -webkit-appearance: none; position: relative; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--edge); background: none; cursor: pointer; }
+.btr-redo-root .btr-redo-check input[type="checkbox"]:checked { border-color: var(--rose); background: var(--rose); }
+.btr-redo-root .btr-redo-check input[type="checkbox"]:checked::after { content: ''; position: absolute; left: 5px; top: 1.5px; width: 4px; height: 9px; border: solid var(--on); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.btr-redo-root .btr-redo-check input[type="checkbox"]:focus-visible { outline: 2px solid var(--rose); outline-offset: 2px; }
+.btr-plan.fix.btr-redo-root .foot > .go, .btr-plan.fix .btr-redo-root .foot > .go { flex: none; align-self: flex-end; }
+
+/* 한 번에 정하기 화면 */
+.btr-redo-root .rdecide { overflow-y: auto; padding: 0 16px 16px; display: block; }
+.btr-redo-root .rtitle { font-size: 15px; font-weight: 600; }
+.btr-redo-root .rprev { margin: 8px 0 0; padding: 8px 12px; border-radius: 14px; background: var(--field); font-family: var(--story); font-size: 14px; line-height: 1.6; color: var(--mute); }
+.btr-redo-root .rdecide .rnames { margin: 0; }
+.btr-redo-root .rdecide .go { margin-top: 16px; }

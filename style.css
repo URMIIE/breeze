@@ -22,14 +22,14 @@
 /* 고른 글 메뉴: 모은 원래 버튼은 안 보이게(코드는 그대로 돎) */
 .etk-sel-hidden { opacity: 0 !important; pointer-events: none !important; }
 .etk-sel-chip {
-    position: fixed; z-index: 10050; width: 30px; height: 30px; border-radius: 999px; padding: 0;
+    position: fixed; z-index: 2147481050; width: 30px; height: 30px; border-radius: 999px; padding: 0;
     display: flex; align-items: center; justify-content: center; cursor: pointer;
     background: var(--SmartThemeBlurTintColor); color: var(--SmartThemeBodyColor);
     border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 25%, transparent);
     box-shadow: 0 2px 8px rgb(0 0 0 / .25); backdrop-filter: blur(8px);
 }
 .etk-sel-menu {
-    position: fixed; z-index: 10051; min-width: 180px; max-width: min(280px, 90vw); padding: 4px;
+    position: fixed; z-index: 2147481051; min-width: 180px; max-width: min(280px, 90vw); padding: 4px;
     display: flex; flex-direction: column; border-radius: 10px;
     background: var(--SmartThemeBlurTintColor); color: var(--SmartThemeBodyColor);
     border: 1px solid color-mix(in srgb, var(--SmartThemeBodyColor) 20%, transparent);
@@ -293,7 +293,7 @@ button.etk-sel-item:hover { background: color-mix(in srgb, currentColor 10%, tra
 .etk-splash-full:hover { opacity: 1; }
 .etk-splash-thumb-portrait .etk-splash-full { right: 5px; bottom: 5px; padding: 4px; font-size: 10px; }
 .etk-splash-thumb-portrait { position: relative; }
-.etk-splash-fullview { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; z-index: 100000;   /* 휴대폰 화면에선 inset:0 만으로는 높이가 0 이 됐음(기댈 칸의 높이가 0) — 화면 크기를 직접 */
+.etk-splash-fullview { position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh; z-index: 2147482000;   /* 휴대폰 화면에선 inset:0 만으로는 높이가 0 이 됐음(기댈 칸의 높이가 0) — 화면 크기를 직접 */
   display: flex; align-items: center; justify-content: center; background: #000; cursor: zoom-out; animation: etk-full-in .2s ease; }
 .etk-splash-fullview iframe { width: 100vw; height: 100vh; border: 0; pointer-events: none; }
 .etk-splash-fullview iframe.etk-port { flex: none; transform-origin: center; border-radius: 18px; }
@@ -510,11 +510,11 @@ html.etk-toast-close #toast-container > div:has(> .toast-close-button):has(> .et
 .etk-settings .etk-tf-open { width: fit-content; margin: 6px 0; }
 .etk-settings .etk-tf-saved small { flex: 1; }
 html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
-.etk-tf-box { --tf-accent: var(--SmartThemeQuoteColor, #6b8afd); position: fixed; left: 0; top: 0; z-index: 100000; pointer-events: none; opacity: 0; border-radius: 8px; outline: 2px solid color-mix(in srgb, var(--tf-accent) 85%, transparent); outline-offset: 3px; background: color-mix(in srgb, var(--tf-accent) 7%, transparent); box-shadow: 0 0 0 7px color-mix(in srgb, var(--tf-accent) 10%, transparent); transition: transform .14s ease, width .14s ease, height .14s ease, opacity .18s ease, outline-color .18s ease; will-change: transform; }
+.etk-tf-box { --tf-accent: var(--SmartThemeQuoteColor, #6b8afd); position: fixed; left: 0; top: 0; z-index: 2147482000; pointer-events: none; opacity: 0; border-radius: 8px; outline: 2px solid color-mix(in srgb, var(--tf-accent) 85%, transparent); outline-offset: 3px; background: color-mix(in srgb, var(--tf-accent) 7%, transparent); box-shadow: 0 0 0 7px color-mix(in srgb, var(--tf-accent) 10%, transparent); transition: transform .14s ease, width .14s ease, height .14s ease, opacity .18s ease, outline-color .18s ease; will-change: transform; }
 .etk-tf-box.etk-show { opacity: 1; }
 .etk-tf-box.etk-hover { outline-width: 1.5px; outline-color: color-mix(in srgb, var(--tf-accent) 55%, transparent); background: color-mix(in srgb, var(--tf-accent) 5%, transparent); box-shadow: none; }
 .etk-tf-box::after { content: attr(data-name); position: absolute; left: -3px; bottom: calc(100% + 7px); padding: 2px 9px; border-radius: 999px; background: var(--tf-accent); color: #fff; font: 600 11.5px/1.5 "Noto Sans", sans-serif; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
-.etk-tf-bar, .etk-tf-card, .etk-tf-list, .etk-tf-zap { position: fixed; z-index: 100002; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)); box-shadow: 0 8px 28px rgba(0,0,0,.28); font-family: "Noto Sans", sans-serif; font-size: 13px; line-height: 1.4; backdrop-filter: blur(8px); }
+.etk-tf-bar, .etk-tf-card, .etk-tf-list, .etk-tf-zap { position: fixed; z-index: 2147482002; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)); box-shadow: 0 8px 28px rgba(0,0,0,.28); font-family: "Noto Sans", sans-serif; font-size: 13px; line-height: 1.4; backdrop-filter: blur(8px); }
 .etk-tf-bar *, .etk-tf-card *, .etk-tf-list * { box-sizing: border-box; }
 /* 맨 위에 두면 실리태번 위쪽 아이콘 줄을 가려서 패널을 못 열었음 → 입력창 바로 위 */
 /* 막대 빈 곳을 잡고 옮김 */
@@ -610,7 +610,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 .etk-tf-box.etk-tag-in::after { bottom: auto; top: 6px; }
 .etk-tf-box.etk-edit.etk-tag-in::after { bottom: auto; top: 30px; }
 .etk-tf-acts { flex-wrap: wrap; }
-.etk-tf-themes { position: fixed; z-index: 100003; width: min(300px, calc(100vw - 16px)); height: min(60vh, 420px); max-height: min(60vh, 420px); display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)); box-shadow: 0 8px 28px rgba(0,0,0,.3); font: 13px/1.4 "Noto Sans", sans-serif; }
+.etk-tf-themes { position: fixed; z-index: 2147482003; width: min(300px, calc(100vw - 16px)); height: min(60vh, 420px); max-height: min(60vh, 420px); display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: var(--tf-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee); border: 1px solid var(--SmartThemeBorderColor, rgba(127,127,127,.4)); box-shadow: 0 8px 28px rgba(0,0,0,.3); font: 13px/1.4 "Noto Sans", sans-serif; }
 .etk-tf-themes-head { font-weight: 600; }
 .etk-tf-themes-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .etk-tf-themes-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
@@ -691,7 +691,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
     .etk-tf-card .etk-tf-what { cursor: default; }
 }
 
-.etk-tf-guide { position: fixed; left: 0; top: 0; z-index: 100001; pointer-events: none; background: #ff4d8d; }
+.etk-tf-guide { position: fixed; left: 0; top: 0; z-index: 2147482001; pointer-events: none; background: #ff4d8d; }
 .etk-tf-guide-x { width: 1px; height: 100vh; }
 .etk-tf-guide-y { height: 1px; width: 100vw; }
 .etk-tf-hist { display: inline-flex; }
@@ -762,7 +762,11 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 .etk-tf-bar .etk-tf-pickbtn[hidden] { display: none !important; }
 
 /* ───── 설정 창: 뒤를 가리지 않는 작은 창(PC 는 끌어 옮김, 휴대폰은 아래에서 올라옴 · 손잡이로 높이). 자리 · 크기는 JS 가 px 로 넣음 */
-#etk_dialog { position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 10100; }
+/* breeze 가 화면에 띄우는 창 · 메뉴 · 판의 층: 다른 확장이 띄워 두는 버튼(z-index 190만 · 200만)이 휴대폰에서 창을 가렸다.
+   그래서 모두 21억대(2147481000~2147482003)에 두고, 서로의 차례는 예전 값의 차례 그대로다. 번역 설정 판(2147483000)이 그 위.
+   실리태번 알림 상자는 이 가운데 하나라도 떠 있는 동안 맨 위로 올린다(아래 규칙). 고르는 창 · 확인 창(dialog)은 늘 맨 위 층이다 */
+body:has(> #etk_dialog, > .etk-tf-box, > .etk-wif-pop, > .etk-sel-menu, > .bzp-sheet, > .bzp-tools, > .etk-pg-menu, > .etk-splash-fullview, > .bw-glass:not([hidden])) #toast-container { z-index: 2147483647 !important; }
+#etk_dialog { position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 2147481100; }
 #etk_dialog .etk-window { --etk-line: color-mix(in srgb, var(--SmartThemeBodyColor) 12%, transparent); --etk-soft: color-mix(in srgb, var(--SmartThemeBodyColor) 6%, transparent); --etk-accent: var(--SmartThemeQuoteColor, #7a9cc6);
     position: fixed; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; border-radius: 14px;
     background: var(--SmartThemeBlurTintColor); color: var(--SmartThemeBodyColor); border: 1px solid var(--etk-line); box-shadow: 0 14px 40px rgb(0 0 0 / .3); }
@@ -822,7 +826,9 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 /* 갈래 버튼(창 머리 아래): 아이콘 위 · 이름 아래, 고른 갈래만 강조색과 밑줄. 세부 설정 한 칸 화면에선 숨김 */
 #etk_dialog .etk-tabs { flex: none; display: flex; padding: 0 8px; border-bottom: 1px solid var(--etk-line); }
 #etk_dialog.etk-in-detail .etk-tabs { display: none; }
-#etk_dialog .etk-tab { flex: 1; min-width: 0; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font-size: 13px; line-height: 1.1; cursor: pointer; opacity: .62; white-space: nowrap; }
+/* 갈래 버튼: 가운데 맞춤이면 아이콘 윗변은 위 가로줄에서 6px, 글 아래는 글자 아래 빈 자리까지 더해 밑줄과 더 떨어져 보여 아이콘이 위에 붙어 보였다.
+   위만 3px 더 띄운다(높이도 3px 늘려 글과 밑줄 사이는 그대로) */
+#etk_dialog .etk-tab { flex: 1; min-width: 0; height: 55px; box-sizing: border-box; padding-top: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; font-size: 13px; line-height: 1.1; cursor: pointer; opacity: .62; white-space: nowrap; }
 #etk_dialog .etk-tab .etk-row-icon { width: auto; font-size: 15px; opacity: 1; color: inherit; }
 #etk_dialog .etk-tab:hover { opacity: .9; }
 /* 고른 갈래의 밑줄은 곧은 선으로: 둥근 모서리가 있으면 선 끝이 위로 말려 올라간다 */
@@ -835,7 +841,8 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 #etk_dialog .etk-row-icon { flex: none; width: 24px; text-align: center; font-size: 16px; opacity: .7; }
 #etk_dialog .etk-row-text { flex: 1; min-width: 0; }
 #etk_dialog .etk-row-name { font-weight: 600; word-break: keep-all; }
-#etk_dialog .etk-row-desc { margin-top: 2px; font-size: max(13px, .85em); opacity: .62; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 설명은 창이 좁으면 줄을 바꿔 끝까지 보인다(한 줄로 자르면 무슨 기능인지 읽을 수 없었다) */
+#etk_dialog .etk-row-desc { margin-top: 2px; font-size: max(13px, .85em); opacity: .62; line-height: 1.35; word-break: keep-all; overflow-wrap: anywhere; }
 #etk_dialog .etk-row-off .etk-row-name { opacity: .6; }
 #etk_dialog .etk-row-off .etk-row-icon { opacity: .35; }
 #etk_dialog .etk-row-more { flex: none; font-size: max(13px, .85em); opacity: .6; white-space: nowrap; }
@@ -1040,7 +1047,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 .etk-wif-chip { margin-left: 8px; padding: 0 6px; border-radius: 4px; font-size: calc(var(--mainFontSize) * .72); line-height: 1.6; opacity: .6; cursor: pointer; background: color-mix(in srgb, currentColor 9%, transparent); white-space: nowrap; }
 .etk-wif-chip:hover { opacity: 1; }
 /* 표시 옆에 뜨는 작은 목록(창 대신). 높이는 정해 두고 길면 안에서 스크롤 */
-.etk-wif-pop { position: fixed; z-index: 100001; width: min(280px, calc(100vw - 16px)); max-height: min(260px, 50dvh); overflow-y: auto; padding: 6px 8px; text-align: left;
+.etk-wif-pop { position: fixed; z-index: 2147482001; width: min(280px, calc(100vw - 16px)); max-height: min(260px, 50dvh); overflow-y: auto; padding: 6px 8px; text-align: left;
     font-size: calc(var(--mainFontSize, 15px) * .85); background: var(--wif-bg, var(--SmartThemeBlurTintColor, #222)); color: var(--SmartThemeBodyColor, #eee);
     border: 1px solid var(--SmartThemeBorderColor, #555); border-radius: 10px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
 .etk-wif-chip.etk-on { opacity: 1; }
@@ -1107,7 +1114,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 .etk-wip-book.etk-drop-before { box-shadow: inset 0 2px 0 var(--SmartThemeQuoteColor, currentColor); }
 .etk-wip-book.etk-drop-after { box-shadow: inset 0 -2px 0 var(--SmartThemeQuoteColor, currentColor); }
 .etk-wip-folder.etk-drop { outline: 2px dashed color-mix(in srgb, var(--SmartThemeQuoteColor, currentColor) 70%, transparent); outline-offset: -2px; border-radius: 8px; }
-.etk-wip-ghost { position: fixed; left: 0; top: 0; z-index: 100000; pointer-events: none; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--SmartThemeBlurTintColor); border: 1px solid var(--SmartThemeBorderColor); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.etk-wip-ghost { position: fixed; left: 0; top: 0; z-index: 2147482000; pointer-events: none; max-width: 240px; padding: 6px 10px; border-radius: 8px; font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--SmartThemeBlurTintColor); border: 1px solid var(--SmartThemeBorderColor); box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 /* 목록 줄 두 줄: 위 이름(길면 줄바꿈해 다 보임) · 아래 걸린 캐릭터 사진 · 켜진 항목 / 전체 · 토큰 */
 .etk-wip-bcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .etk-wip-bname { min-width: 0; overflow-wrap: anywhere; line-height: 1.35; }
@@ -1466,6 +1473,7 @@ html.etk-tf-hit *:not(.etk-tf-box) { pointer-events: auto !important; }
 /* 묶음 줄: 안의 기능이 일부만 켜져 있을 때 */
 #etk_dialog .etk-row-part { margin-left: 8px; opacity: .65; font-weight: 400; }
 
+.etk-translator-box { margin-top: 8px; }
 
 /* 답 받는 중 표시 */
 #chat .mes .mes_text[data-etk-stream-progress]::after { content: attr(data-etk-stream-progress); display: block; clear: both; margin: 6px 0 2px; font-size: .8em; font-style: normal; font-weight: 400; text-align: start; opacity: .6; font-variant-numeric: tabular-nums; }

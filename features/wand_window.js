@@ -38,10 +38,12 @@ function hint(text) {
 // ── 창 만들기 ──
 function headHtml() {
     if (S.editing) return '<span></span><span class="bw-grip"></span><button type="button" class="bw-hbtn bw-done" data-act="done">완료</button>';
-    const pin = S.o.pinned;
-    return `<button type="button" class="bw-hbtn${pin ? ' bw-pin-on' : ''}" data-act="pin" aria-pressed="${pin}" aria-label="창 고정" title="창 고정"><i class="fa-solid fa-thumbtack"></i></button>`
-        + '<span class="bw-grip"></span>'
-        + '<button type="button" class="bw-hbtn" data-act="edit" aria-label="꾸미기" title="꾸미기"><i class="fa-solid fa-sliders"></i></button>';
+    const pin = S.o.pinned, row = S.o.dock.on;
+    return '<span class="bw-hgroup">'
+        + `<button type="button" class="bw-hbtn${pin ? ' bw-pin-on' : ''}" data-act="pin" aria-pressed="${pin}" aria-label="창 고정" title="창 고정"><i class="fa-solid fa-thumbtack"></i></button>`
+        + `<button type="button" class="bw-hbtn${row ? ' bw-pin-on' : ''}" data-act="dock" aria-pressed="${row}" aria-label="늘 떠 있는 줄" title="늘 떠 있는 줄"><i class="fa-solid fa-ellipsis"></i></button>`
+        + '</span><span class="bw-grip"></span>'
+        + '<button type="button" class="bw-hbtn bw-hend" data-act="edit" aria-label="꾸미기" title="꾸미기"><i class="fa-solid fa-sliders"></i></button>';
 }
 const paintHead = () => { S.win.querySelector('.bw-head').innerHTML = headHtml(); };
 
@@ -52,7 +54,7 @@ function build() {
     win.hidden = true;
     win.setAttribute('role', 'dialog');
     win.setAttribute('aria-label', WAND_WINDOW_NAME);
-    win.innerHTML = '<div class="bw-head"></div><div class="bw-grid"></div><div class="bw-sheet" hidden></div><div class="bw-rs" aria-hidden="true"></div>';
+    win.innerHTML = '<div class="bw-head"></div><div class="bw-grid"></div><div class="bw-sheet" hidden></div><div class="bw-rs bw-rs-x" data-axis="x" aria-hidden="true"></div><div class="bw-rs bw-rs-y" data-axis="y" aria-hidden="true"></div><div class="bw-rs" aria-hidden="true"></div>';
     document.body.append(win);
     S.win = win;
     S.grid = win.querySelector('.bw-grid');
@@ -60,8 +62,9 @@ function build() {
     win.addEventListener('click', onWinClick);
     win.addEventListener('keydown', onWinKey);
     win.querySelector('.bw-head').addEventListener('pointerdown', onHeadDown);
-    win.querySelector('.bw-rs').addEventListener('pointerdown', onResizeDown);
+    for (const grip of win.querySelectorAll('.bw-rs')) grip.addEventListener('pointerdown', onResizeDown);
     S.grid.addEventListener('pointerdown', (e) => edit.onGridDown(S, H, e));
+    win.addEventListener('pointerdown', (e) => edit.onPopDown(S, H, e));
     applyVars(win);
 }
 
@@ -125,9 +128,11 @@ function onResizeDown(e) {
     if (e.button > 0) return;
     e.preventDefault();
     const start = S.win.getBoundingClientRect();
+    // 오른쪽 가장자리는 폭만, 아래 가장자리는 높이만, 모서리는 둘 다
+    const axis = e.currentTarget.dataset.axis, wide = axis !== 'y', tall = axis !== 'x';
     const size = (dx, dy) => ({
-        w: Math.min(Math.max(150, start.width + dx), innerWidth - start.left - MARGIN),
-        h: Math.min(Math.max(160, start.height + dy), innerHeight - start.top - MARGIN),
+        w: Math.min(Math.max(WIN_MIN.w, start.width + (wide ? dx : 0)), innerWidth - start.left - MARGIN),
+        h: Math.min(Math.max(WIN_MIN.h, start.height + (tall ? dy : 0)), innerHeight - start.top - MARGIN),
     });
     dragWith(e, (dx, dy) => {
         const s = size(dx, dy);
@@ -239,11 +244,20 @@ function togglePin() {
     hint(S.o.pinned ? '창 고정: 아이콘이나 창 밖을 눌러도 창이 남아요' : '고정 풀림: 아이콘을 누르면 창이 닫혀요');
 }
 
+function toggleDockRow() {
+    S.o.dock.on = !S.o.dock.on;
+    save();
+    dock.render(S, H);
+    paintHead();
+    hint(S.o.dock.on ? '늘 떠 있는 줄을 켰어요' : '늘 떠 있는 줄을 껐어요');
+}
+
 function onWinClick(e) {
     // 원래 줄을 대신 누른 클릭이 문서까지 올라가면, 옆 메뉴를 띄운 확장이 '바깥을 눌렀다'고 보고 그 메뉴를 바로 닫았음
     e.stopPropagation();
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'pin') return togglePin();
+    if (act === 'dock') return toggleDockRow();
     if (act === 'edit') return edit.enterEdit(S, H);
     if (act === 'done') { edit.exitEdit(S, H); return applyPlace(); }
     if (S.editing) return edit.onEditClick(S, H, e);

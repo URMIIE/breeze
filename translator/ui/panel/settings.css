@@ -1,0 +1,36 @@
+/* ── 새 설정 판의 보기 · 내 규칙 화면(settings.js). 모습은 common.css(시안 그대로), 여기는 시안이 줄마다 따로 적어 둔 배치만 ── */
+.btr-plan .btr-view .btr-view-first { margin-top: 0; }
+.btr-plan .btr-view .btr-view-when { overflow: visible; }
+/* 고르는 목록의 줄: 오른쪽 칸에서는 줄의 안쪽 여백이 0 이 되어 글과 동그라미가 묶음 가장자리에 붙었다. 묶음 안에서는 양옆을 띄운다 */
+.btr-plan .btr-view .btr-view-when .rule { padding: 0 14px !important; }
+/* 먼저 보이는 글 버튼은 이름 바로 아래에 칸 너비만큼 편다(이름은 왼쪽 끝, 버튼은 오른쪽 끝에 떨어져 있었다). 원문 글자 크기는 이름과 한 줄이라 걸지 않는다 */
+.btr-plan .btr-view > .btr-view-first + .seg { width: 100%; }
+/* 원문 글자 크기는 따로 줄을 두지 않고 '이렇게 보여요' 이름표 줄 오른쪽 끝에 둔다(바로 아래 예시에 보이는 값).
+   버튼(24px)이 이름표 글줄(1lh)보다 높아 그대로 두면 줄이 커진다: 버튼 묶음이 차지하는 높이는 글줄 하나로 두고 넘치는 만큼 위 여백(12px)으로 걸친다.
+   그래서 이름표 위아래 여백 · 줄 높이는 다른 이름표와 같고, 버튼 아래와 예시 상자 사이는 이름표 글과 같은 4px */
+.btr-plan.fix .btr-view .btr-view-demo-lab { align-items: flex-end; }
+.btr-plan.fix .btr-view .btr-view-size { display: flex; align-items: center; gap: 6px; margin-top: calc(1lh - 24px); white-space: nowrap; }
+.btr-plan.fix .btr-view .btr-view-size .seg span { height: 24px; padding: 0 10px !important; font-size: 12px; }
+/* common.css 의 .seg.h 규칙(1fr 1fr · 양옆 4px, 둘 다 !important)이 걸려 긴 쪽('본문과 같게')의 양옆 여백이 4px 뿐이었다(잼: 칸 63px 둘).
+   칸마다 제 글 폭 + 양옆 10px 로 */
+.btr-plan.fix .btr-view .btr-view-size .seg { flex: none; grid-template-columns: auto auto !important; }
+/* 문단을 눌러 보라는 안내: 이름표 줄 대신 예시 상자 안 아래쪽 구석에 흐리게(줄을 늘리지 않게) */
+.btr-plan .btr-view .demo.vd { position: relative; }
+.btr-plan .btr-view .btr-view-hint { position: absolute; right: 10px; bottom: 6px; font-size: 12px; color: var(--mute); opacity: .8; pointer-events: none; }
+.btr-plan.fix .btr-view [data-where] { margin-top: 12px; }
+/* 쓰는 곳 줄: 고르는 칸이 오른쪽 끝에 떨어져 있었다(.two.r 의 1fr auto). 이름 바로 옆에 붙인다 */
+.btr-plan.fix .btr-where.two.r { grid-template-columns: auto auto; justify-content: start; gap: 12px; }
+.btr-plan.fix .btr-where .sel { justify-content: flex-start; }
+.btr-plan .btr-view .btr-view-when .rule, .btr-plan .btr-view .seg span { cursor: pointer; }
+.btr-plan .btr-view .demo { min-height: 112px; }
+/* 원문 글자 크기: 채팅의 원문 칸과 같은 비(작게 = 본문의 .88배, 본문과 같게 = 1배) */
+.btr-plan .btr-view .demo .orig, .btr-plan .btr-view .demo .bub { font-size: 1em; }
+.btr-plan .btr-view .demo .btr-view-small { font-size: .88em; }
+.btr-plan .btr-rules .btr-rules-new { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; margin-top: 12px; align-items: center; }
+.btr-plan .btr-rules .btr-rules-new button.go { border: 0; margin: 0; font-family: inherit; cursor: pointer; }
+.btr-plan .btr-rules .btr-rules-new .sel { min-width: 112px; }
+.btr-plan .btr-rules input.input { display: block; width: 100%; min-width: 0; margin: 0; font-family: inherit; color: var(--ink); box-sizing: border-box; }
+.btr-plan .btr-rules input.input::placeholder { color: var(--mute); opacity: 1; }
+/* 지우기 표시는 줄의 글 칸처럼 늘어나지 않는다(공통 규칙이 줄 안의 span 을 전부 늘린다) */
+.btr-plan .btr-rules .rule .btr-rules-del { flex: none; display: grid; place-items: center; width: 32px; height: 32px; cursor: pointer; }
+.btr-plan .btr-rules .rule .tag > span { flex: none; }

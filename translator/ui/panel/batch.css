@@ -1,0 +1,14 @@
+/* 채팅 전부 번역의 시작 전 확인 화면. 색은 테마 변수 넷에서만 만든다 */
+.btr-batch { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+
+.btr-batch .btr-batch-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px; overscroll-behavior: contain; }
+.btr-batch .btr-batch-kv { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--hair); font-size: 14px; }
+.btr-batch .btr-batch-kv:first-child { border-top: 0; }
+.btr-batch .btr-batch-kv b { font-weight: 600; }
+.btr-batch .btr-batch-kv span { color: var(--mute); text-align: right; }
+.btr-batch .btr-batch-kv .is-many { color: var(--rose); font-weight: 600; }
+
+/* 처음 답부터 / 최근 답부터 */
+.btr-batch .btr-batch-seg { display: inline-flex; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; }
+.btr-batch .btr-batch-from + .btr-batch-from { border-left: 1px solid var(--hair); }
+
